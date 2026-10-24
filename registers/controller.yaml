@@ -8,10 +8,14 @@
 #   likely    - behaves as described, partial or approximate display match
 #   guess     - inferred from behaviour only
 #   unknown   - changes or holds a value, meaning not identified
+#
+# mirrors: registers that hold the same value (equal in >=95 percent of log samples; the rest is
+# sampling skew). Registers that track a value but differ (second thermistor, requested vs actual)
+# get their own entry.
 
 source: controller-native
 device:
-  controller_firmware: "SIT 547_00 May 15 2018"   # decoded from registers 30-44
+  controller_firmware: "SIT 547_00 May 15 2018"   # decoded from registers 30-44; full string ends "938FT"
   tested_models: []                                # TODO: add boiler model
 
 link:
@@ -31,7 +35,10 @@ encodings:
     description: Temperature in degrees F. Bit 15 is a flag; 0x8000 alone means no sensor.
     formula: "((raw & 0x7FFF) - 9468) / 25"
     unit: degF
-    note: Exact for parameters and outdoor. Live water/flue sensors read up to ~3 F off versus the display.
+    note: >-
+      Exact for parameters and outdoor. Live water sensors matched the display within its truncation at idle
+      (131.7 -> 131, 129.7 -> 129). The up-to-3 F gaps seen while firing match register values 10-20 s
+      earlier, so they are most likely display lag, not a scale error. Not yet checked at steady high fire.
     no_sensor: 0x8000
   u16:
     formula: "raw"
@@ -43,33 +50,52 @@ encodings:
     description: ASCII text, two characters per register, characters swapped within each register.
 
 live:
-  - {name: outlet_temp,    address: 62,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [64, 154]}
-  - {name: inlet_temp,     address: 73,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [155], note: "outlet - inlet matched display delta T; swapped with exhaust once during discovery"}
-  - {name: exhaust_temp,   address: 63,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [65, 156], note: "falls fast as firing rate drops"}
+  - {name: outlet_temp,    address: 62,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [154]}
+  - {name: outlet_temp_2,  address: 64,   encoding: temp_f, confidence: likely, note: "second outlet thermistor (dual sensor, likely high limit); within 0.7 F of r62"}
+  - {name: inlet_temp,     address: 73,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [155], note: "outlet - inlet matched display delta T allowing for lag; HA return pipe probe tracks it (sd about 1 F, reads 7 F low)"}
+  - {name: exhaust_temp,   address: 63,   encoding: temp_f, confidence: likely, accuracy_f: 3, note: "falls fast as firing rate drops; reads 15-25 F below inlet at low fire, recheck against display"}
+  - {name: exhaust_temp_2, address: 65,   encoding: temp_f, confidence: likely, note: "second flue thermistor; within 0.9 F of r63"}
+  - {name: exhaust_temp_max, address: 156, encoding: temp_f, confidence: guess, note: "equals max(r63, r65) in 92 percent of samples"}
   - {name: outdoor_temp,   address: 75,   encoding: temp_f, confidence: confirmed, mirrors: [158]}
   - {name: flame_signal,   address: 66,   encoding: u16, unit: nA, scale: 0.001, publish_unit: uA, confidence: confirmed, note: "12688 when display read 12.7 uA"}
   - {name: fan_speed,      address: 110,  encoding: u16, unit: rpm, confidence: confirmed}
-  - {name: fan_speed_target, address: 89, encoding: u16, unit: rpm, confidence: likely, mirrors: [106, 107, 149]}
-  - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, mirrors: [131], note: "8516 when display read 85 percent; display lags by roughly 10 s"}
-  - {name: firing_rate_max, address: 81,  encoding: u16, unit: percent, scale: 0.01, confidence: guess, mirrors: [132], note: "about 100.00 percent"}
-  - {name: setpoint_sh2_live, address: 143, encoding: temp_f, confidence: likely, mirrors: [144], note: "copy of SH2/SH3 setpoint"}
-  - {name: setpoint_dhw_live, address: 145, encoding: temp_f, confidence: likely}
+  - {name: fan_speed_target, address: 89, encoding: u16, unit: rpm, confidence: likely, mirrors: [106, 149], note: "= 1700 + (r80/100 - 10) * 6500/90 within 50 rpm"}
+  - {name: fan_speed_command, address: 107, encoding: u16, unit: rpm, confidence: likely, note: "same curve from r131; about 1 s ahead of r89; clamped to min fan 1700 at idle"}
+  - {name: fan_tach_period, address: 108, encoding: u16, confidence: likely, note: "r108 * r110 = 3.75e6; inverse of fan speed, stale value at idle; do not publish"}
+  - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "8516 when display read 85 percent; display lags by roughly 10 s; 10 percent = min fan, 100 percent = max fan"}
+  - {name: firing_rate_requested, address: 131, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "always a multiple of 10; about 1 s ahead of r80"}
+  - {name: setpoint_sh1_target, address: 142, encoding: temp_f, confidence: likely, note: "SH1 setpoint after outdoor reset: 172.1 at 41.3 F outdoor, 167.7 at 43.6 F; stops updating with no call"}
+  - {name: setpoint_sh2_target, address: 143, encoding: temp_f, confidence: likely, note: "equals SH2 setpoint 125"}
+  - {name: setpoint_sh3_target, address: 144, encoding: temp_f, confidence: guess, note: "equals SH3 setpoint 125; SH2/SH3 split unverified while both are 125"}
+  - {name: setpoint_dhw_target, address: 145, encoding: temp_f, confidence: likely}
+  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown"}
 
 status:
-  - {name: status_code,    address: 84,   encoding: u16, confidence: guess, note: "4 in standby, 9/10 while burning"}
+  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 9: running, 10: post-purge}, note: "10 began as the flame went out and ended when r85 reached 0"}
+  - {name: state_timer,    address: 85,   encoding: u16, unit: s, scale: 0.1, confidence: guess, note: "counted 11.3 -> 0 s during post-purge"}
+  - {name: burn_minutes_countdown, address: 87, encoding: u16, unit: min, confidence: guess, note: "1440 at standby, down 1 every ~61 s while firing, reset at standby"}
   - {name: state_flags_a,  address: 138,  encoding: u16, confidence: unknown, note: "4 -> 8 at burner shutdown"}
   - {name: state_flags_b,  address: 139,  encoding: u16, confidence: unknown, note: "16 -> 0 at burner shutdown"}
   - {name: state_flags_c,  address: 140,  encoding: u16, confidence: unknown, note: "96 -> 112 at burner shutdown"}
-  - {name: output_flags,   address: [115, 116, 118, 127, 128, 130, 90, 105], encoding: u16, confidence: unknown, note: "1 while running, 0 in standby; likely pump/valve/blower/ignition"}
+  - {name: state_flags_d,  address: 136,  encoding: u16, confidence: unknown, note: "8 -> 0 at gas off (10:02:17)"}
+  - {name: gas_valve_flag, address: 118,  encoding: u16, confidence: guess, note: "1 -> 0 at 10:02:17, the instant demand ended, 1 s before flame signal fell"}
+  - {name: output_flags_flame_off, address: [115, 127, 130], encoding: u16, confidence: unknown, note: "1 -> 0 at 10:02:18-19 as the flame went out"}
+  - {name: output_flag_116, address: 116, encoding: u16, confidence: unknown, note: "1 -> 0 at 10:02:27, mid post-purge"}
+  - {name: output_flags_post_purge, address: [90, 105, 128], encoding: u16, confidence: unknown, note: "1 -> 0 at 10:02:30, end of post-purge; blower/burner sequence?"}
+  - {name: pump_output_feedback, address: 81, encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "about 100 percent (9994/10005) while firing and 60 s after flame off, then 0 with r132/r133/r137; was mapped as firing_rate_max"}
+  - {name: pump_output_command, address: 132, encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "10000 while firing, 0 at 10:03:18 (60 s after flame off)"}
+  - {name: analog_output_a, address: 133, encoding: u16, confidence: unknown, note: "1000 -> 0 with r132; maybe 10.00 V"}
+  - {name: analog_output_b, address: 135, encoding: u16, confidence: unknown, note: "1000 -> 0 at 10:02:48, 30 s after flame off"}
+  - {name: post_circulation_flag, address: 137, encoding: u16, confidence: guess, note: "1 from flame off (10:02:18) until 10:03:19"}
 
 counters:
   - {name: power_on_hours,    address: 1302, words: 2, encoding: u32, unit: h,     confidence: confirmed}
   - {name: ignition_attempts, address: 1304, words: 2, encoding: u32,              confidence: confirmed}
   - {name: ignitions,         address: 1306, words: 2, encoding: u32,              confidence: confirmed}
   - {name: sh_run_time,       address: 1308, words: 2, encoding: u32, unit: h,     confidence: confirmed}
-  - {name: counter_1310,      address: 1310, words: 2, encoding: u32,              confidence: unknown, note: "value 2055 at 10:15"}
+  - {name: counter_1310,      address: 1310, words: 2, encoding: u32,              confidence: unknown, note: "value 2055 at 10:15; not DHW run time (display 0)"}
   - {name: sh_cycles,         address: 1312, words: 2, encoding: u32,              confidence: confirmed}
-  - {name: dhw_cycles,        address: 1314, words: 2, encoding: u32,              confidence: guess, note: "0 and DHW cycles on display was 0"}
+  - {name: dhw_cycles,        address: 1314, words: 2, encoding: u32,              confidence: guess, note: "0 and DHW cycles on display was 0; ignitions - SH cycles = 8 is unexplained"}
 
 settings:
   - {name: setpoint_dhw,     address: 1286, encoding: temp_f, confidence: confirmed}
@@ -78,14 +104,21 @@ settings:
   - {name: setpoint_sh3,     address: 1289, encoding: temp_f, confidence: confirmed}
   - {name: high_limit_auto_reset,   address: 1291, encoding: temp_f, confidence: confirmed}
   - {name: high_limit_manual_reset, address: [1292, 1293], encoding: temp_f, confidence: confirmed, note: "two identical copies"}
-  - {name: firing_rate_min_param, address: [1097, 1146], encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "1700; live regs 114 holds the same"}
-  - {name: firing_rate_max_param, address: [1098, 1150], encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "8200; live regs 113 holds the same"}
+  - {name: fan_speed_min,    address: [1097, 1146], encoding: u16, unit: rpm, confidence: likely, note: "1700 = fan at 10 percent rate; was mapped as firing_rate_min_param in percent"}
+  - {name: fan_speed_max,    address: [1098, 1150], encoding: u16, unit: rpm, confidence: likely, note: "8200 = fan at 100 percent rate; was mapped as firing_rate_max_param in percent"}
+  - {name: fan_speed_min_live, address: 114, encoding: u16, unit: rpm, confidence: likely, note: "live copy of 1097"}
+  - {name: fan_speed_max_live, address: 113, encoding: u16, unit: rpm, confidence: likely, note: "live copy of 1098"}
+  - {name: fan_curve_points, address: [1147, 1148, 1149], encoding: u16, unit: rpm, confidence: guess, note: "3500/5300/6750 between min and max at 1146/1150; not all equal, list is a group, not copies"}
+  - {name: post_purge_fan_speed, address: [1109, 1110], encoding: u16, unit: rpm, confidence: likely, note: "2900; fan held 2900 rpm during post-purge"}
 
 info:
-  - {name: firmware_string, address: 30, words: 15, encoding: ascii_swapped, confidence: confirmed}
+  - {name: firmware_string, address: 30, words: 15, encoding: ascii_swapped, confidence: confirmed, note: "SIT 547_00 May 15 2018 938FT"}
 
 unmapped_regions:
-  - {range: [1006, 1295], note: "Parameter block; mostly unlabeled. Includes temp_f values, percent values, timers and what looks like a weekly schedule at 1223-1250 (steps of 1440, minutes)."}
+  - {range: [1006, 1295], note: "Parameter block; mostly unlabeled. Includes temp_f values, percent values, fan RPMs (1094-1150), timers and what looks like a weekly schedule at 1223-1250 (steps of 1440, minutes)."}
+  - {range: [72, 72], note: "Not a counter: read 3828 (= SH run hours) in the idle scan by coincidence, wanders 3553-3887 in the log."}
+  - {range: [150, 151], note: "r150 signed, about +/-7, maybe a rate of change; r151 rises in steps while firing."}
+  - {range: [172, 176], note: "Controller clock (20, 5, 18, hour, minute). Runs, but about 54 min slow and the date is wrong; do not use as a timestamp."}
   - {range: [500, 502], note: "Small values 6, 11, 2"}
   - {range: [956, 1005], note: "exception 2 (illegal address)"}
   - {range: [1406, 2047], note: "mostly exception 2"}

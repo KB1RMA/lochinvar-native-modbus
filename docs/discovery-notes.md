@@ -1,5 +1,10 @@
 # Lochinvar boiler Modbus map (reverse-engineered, read-only)
 
+> Working notes from the session, kept as written. Some entries are superseded: see `registers/controller.yaml`
+> and the audit section of `docs/reverse-engineering-log.md`. In particular r81/r132 are not a 100 percent
+> firing-rate maximum (pump post-circulation, most likely), r84 = 10 is post-purge, r142/r146/r147 are targets,
+> 1097/1098 are fan rpm, and the temperature formula is the 9468/25 one below.
+
 Link: Modbus RTU, 19200 baud, 8N1, slave ID 1, function 03 (holding registers). Function 04 returns exception 1.
 
 ## Temperatures

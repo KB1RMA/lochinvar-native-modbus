@@ -27,7 +27,10 @@ display readings used as ground truth, open questions), `docs/discovery-notes.md
   open/close cycles. Unplug and replug the adapter. Prefer one open per run.
 - The boiler display lags the registers by roughly 10 s (firing rate, delta T), so compare with timestamps.
 - 32-bit counters store the high word at the even address, the number you want is usually in the odd one.
-- Temperature scale differs slightly between parameters (exact) and live sensors (about 3 F error).
+- Temperature formula is exact for parameters; live sensors differed from the display by up to ~3 F while
+  firing, which matches display lag (idle readings match within the display's truncation).
+- Home Assistant has strap-on pipe probes (outlet/return probes). They read
+  7-12 F low and lag by ~1 min: good for telling sensors apart, not for calibration.
 - A boiler USB menu entry reading "waiting device..." exists on the controller; it is unrelated to this serial link.
 
 ## Related

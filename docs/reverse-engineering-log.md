@@ -44,13 +44,70 @@ note the display state at that time.
 - Inlet and exhaust were first assigned the other way round; the delta T readings corrected that.
 - Firing rate and fan: r80/r131 both track the firing rate; r89/r106/r107/r149 follow the fan target.
 
+## Audit of the map against the captures (2026-10-24, after the session)
+
+Re-checked `registers/controller.yaml` against the idle scan, all 597 rows of `flame_log.csv` and
+`regs256_2047.json`. No new reads were sent to the boiler.
+
+Corrected:
+- 1097/1146 = 1700 and 1098/1150 = 8200 are fan speeds in rpm, not percents. Over 201 firing samples,
+  r89 = 1700 + (rate - 10) * 6500/90 within 50 rpm, so 10 percent rate = 1700 rpm and 100 percent = 8200 rpm
+  (it also predicts the display's 85 percent -> 7129 rpm). 1146-1150 is a curve 1700/3500/5300/6750/8200,
+  r107 sits at 1700 at idle, and 1109/1110 = 2900 is the fan speed held during post-purge. r113/r114 are the
+  live max/min.
+- r81 is not a firing-rate maximum. It holds about 100.00 percent while firing and for 60 s after the
+  flame goes out, then drops together with r132, r133 and r137 at 10:03:18. Most likely boiler pump
+  post-circulation (speed or a 0-10 V output).
+
+Mirrors that are not copies:
+- r131 is the requested rate (always a multiple of 10, about 1 s ahead of r80).
+- r107 is the commanded fan speed from r131 (within 9 rpm of the same curve, about 1 s ahead of r89).
+- r64 and r65 are second thermistors (within 0.7 / 0.9 F of r62 / r63). r156 = max(r63, r65) in 92 percent
+  of samples. True copies: 154 = 62, 155 = 73, 158 = 75, 106/149 = 89, 147 = 146, 144 = 143 (for now).
+
+Temperature accuracy: at idle the formula matches the display within its truncation (131.7 -> 131,
+129.7 -> 129, 41.3 -> 41). The hot-side gaps (for example display 171 vs register 173.6 at 09:57:49) match
+register values 10-20 s earlier, the same lag seen on firing rate. So the "about 3 F error" is most likely
+display lag. One display reading at steady high fire would confirm it.
+
+Home Assistant pipe probes (outlet/return probes, strap-on): over the
+log window the return probe tracks r73 with a spread of about 1 F (mean 7 F low, best at about 30-60 s lag),
+while the difference to r63 swings 0-47 F. This independently confirms r73 = inlet. The outlet probe reads
+about 12 F below r62. The probes lag and read low, so they confirm which register is which but cannot
+calibrate the formula. the HA boiler-firing sensor stayed "on" through the 10:02:17 shutdown, so it is not
+a usable burner-state reference.
+
+New decodes (see the map for confidence):
+- r84: 9 = running, 10 = post-purge (flame already 0), 4 = standby. r85 counts the post-purge down
+  11.3 -> 0 s in tenths and reaches 0 exactly as r84 goes to 4.
+- r146/r147: active target temperature. Exactly 32.0 F (raw 43036) with no demand. It fell to 32 at
+  10:02:17 while the rate was rising, so that shutdown was a satisfied call for heat, not a fault.
+- r142: SH1 setpoint after outdoor reset (172.1 F at 41.3 F outdoor, 167.7 F at 43.6 F; frozen with no
+  call). So r143/r144 are probably the SH2/SH3 targets rather than copies of each other.
+- r108: fan tach period, r108 * r110 = 3.75e6.
+- r87: minutes counting down from 1440 while firing (one step every ~61 s), reset at standby; puts the
+  burner start at about 09:48.
+- Shutdown order: r118/r136 at gas off (10:02:17), r115/r127/r130 at flame out (10:02:18-19), r116 at
+  10:02:27, r90/r105/r128 at the end of post-purge (10:02:30).
+
+Traps:
+- r72 = 3828 in the idle scan equals SH run hours by coincidence; it wanders 3553-3887 in the log.
+- Clock 172-176 runs but is about 54 min slow and the date (20, 5, 18) is wrong.
+- The firmware string continues past the date: "SIT 547_00 May 15 2018 938FT". "938FT" may identify the model.
+- r63 (exhaust) reads 15-25 F below the inlet at low fire, which is odd for a flue sensor. The display agreed
+  at the time, but a simultaneous display reading of inlet and exhaust would settle it.
+- `tools/probe/07_decode_temps.py` decodes every value with bit 15 set, so counters above 32767 (for
+  example ignitions 34928) show up as bogus temperatures.
+
 ## Open questions / next steps
 
 1. Electrical level and connector of the boiler port; boiler model; fill the README TODOs.
-2. Identify status/state registers (r84, r115-r118, r127-r130, r136-r140). Needs a log of a full startup
-   with the display status text and times (purge, ignition, run, post-purge, standby).
+2. Identify the remaining status/state registers (r115-r118, r127-r130, r136-r140). Needs a log of a full
+   startup with the display status text and times (purge, ignition, run, post-purge, standby). This would
+   also give the r84 codes for pre-purge and ignition.
 3. Parameter block 1006-1295: read more settings from the installer menu (min/max setpoint, differentials,
-   fan speeds, pump delay, outdoor reset) and match them.
+   fan speeds, pump delay, outdoor reset) and match them. Check whether the display's pump delay is 60 s
+   (r81/r132) and min/max fan is 1700/8200.
 4. Register 1311 (2055) and the weekly schedule at 1223-1250.
 5. Check `cwm12345/lochinvar-modbus` status/lockout code tables against our status registers.
 6. Build the poller: read-only, blocks of at most 50, fast poll of 62-75/80/110/84, slow poll of counters
