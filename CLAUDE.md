@@ -49,8 +49,8 @@ display readings used as ground truth, open questions), `docs/discovery-notes.md
 
 ## Boiler states (from the 2026-10-24 long capture; details in docs/reverse-engineering-log.md, session 2)
 
-- r84 status: 4 standby (also shown during anti-cycle, "clocked" and "set point met"), 6 prepurge, 9 running,
-  10 post-purge. Ignition and lockout codes not seen yet (the link drops at ignition).
+- r84 status: 4 standby (also shown during anti-cycle, "clocked" and "set point met"), 6 prepurge, 7 ignition
+  (5-10 s, starts with the flame signal; session 4), 9 running, 10 post-purge. Lockout codes not seen yet.
 - r85 phase timer, 0.1 s, counts down (prepurge 17.7 s, post-purge 11.5 s).
 - r118 = 1 heat demand (any zone; DHW is piped as a zone, so the boiler can't tell which one).
 - r140 = 96 burner wanted, 112 held off (no demand, set point met, clocked). Changes 1 s before prepurge.
@@ -59,11 +59,15 @@ display readings used as ground truth, open questions), `docs/discovery-notes.md
 - Demand with no flame for up to ~11 min is normal. A DHW call with its valve closed showed as demand held on
   for 20+ min with only short burns ending in "set point met".
 
-## Link drops at ignition
+## Link drops at ignition (Mac only so far)
 
-The FTDI link goes silent the second ignition starts, every time (and once during post-purge, 12:26:46). Closing and reopening the port in software
+On the Mac, the FTDI link went silent the second ignition started, every time (and once during post-purge, 12:26:46). Closing and reopening the port in software
 does not help (tcsetattr EINVAL). Only an unplug and replug does. `tools/probe/08_long_capture.py` retries
 every 10 s and resumes by itself after a replug. Suspect spark noise on the cable.
+
+On the ESP32-S3 bridge the link stayed up through both ignitions seen so far (2026-10-24, 14:02 and 15:38;
+log session 4). Why is not known. Two cycles are not proof, so keep checking Boiler Link OK.
+The ESP rebooted 3 times (14:22, 14:42, 14:48) that no OTA flash explains; worth watching too.
 
 ## Related
 

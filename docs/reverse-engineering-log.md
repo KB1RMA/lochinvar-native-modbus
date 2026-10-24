@@ -286,12 +286,60 @@ the last poll before the drop already shows a flame signal of 1.5-2.2 uA with r8
 at the moment the flame rod first sees current, which is when the spark is running. That fits the
 spark-noise suspicion; it does not tell spark noise on the flame rod apart from a real early flame.
 
+## Session 4: first cycles on the ESP32-S3 bridge (2026-10-24, 13:50 onwards)
+
+The ESPHome package (`esphome/lochinvar.yaml`) went live at 13:50 and published to Home Assistant. Data is
+from the Home Assistant recorder, not a capture file. Live readings and status are polled every 5 s, the
+counters every 60 s, so the times below are good to about 5 s and are when Home Assistant received each value.
+
+### The link survives ignition
+
+Both burns went through ignition with no gap, the Boiler Link OK sensor stayed on and no replug was needed.
+On the Mac with the same FT232R (session 2) the link died at every ignition. Possible reasons: the S3's
+USB host recovers differently, or the cable or grounding is different now. That isn't known yet. Keep
+watching Boiler Link OK over more cycles before calling it fixed.
+
+### Timelines
+
+| | Burn 1 | Burn 2 |
+|---|---|---|
+| Heat demand (r118) | 14:01:54-14:03:59 | 15:38:48-15:54:58 |
+| Burner request (r140 = 96) | 14:02:04 | 15:38:48 |
+| Prepurge (r84 = 6) | 14:02:09, 35 s | 15:38:53, 15 s |
+| Ignition (r84 = 7) | 14:02:44, about 5 s | 15:39:08, about 10 s |
+| Flame signal first > 0 | 14:02:43 | 15:39:07 |
+| Running (r84 = 9) | 14:02:49-14:03:59 (70 s) | 15:39:18-15:54:58 (15.7 min) |
+| Post-purge (r84 = 10) | 14:03:59, 10 s | 15:54:58, 15 s |
+| Anti-cycle (r137) | not seen | 15:54:58-15:55:58 |
+| Pump output (r132) 100 % | 14:01:54-14:04:59 | 15:38:48-15:55:58 |
+| Counters +1 | 14:05:05 | 15:40:41 |
+
+### Findings
+
+- r84 = 7 is ignition. It sat between prepurge and running in both burns. The flame signal came up within
+  a second of it starting, and ignition attempts and ignitions both went up by one each time with failed
+  ignitions unchanged at 109. Boiler Status now shows "Ignition".
+- Both burns ended because the call for heat ended, not "set point met". In each one r118 and r140 dropped
+  in the same poll, and post-purge followed. Burn 1 was a 2-minute zone call.
+- Burn 1's prepurge took 35 s, twice the 15-18 s seen everywhere else. There was no failed ignition, so it
+  wasn't a retry. The cause is not known; it may be a longer purge after a long idle.
+- Peak firing rate 85 %, peak fan 7142 rpm (burn 2). The fan started at about 3000 rpm in prepurge.
+- The counters (ignitions, attempts, SH cycles) updated 1-2 minutes after each burn. That is the 60 s poll
+  plus however late the controller writes them.
+- Delta T was 3-7 F while firing. With the pump off it climbs to 27 F within 45 minutes, because the
+  stagnant water at the inlet sensor cools faster than at the outlet. It means nothing without flow.
+- The strap-on probes read 7-12 F low and lagged, as before.
+- The ESP dropped off Home Assistant for about 5 s six times: 13:56, 14:00, 14:22, 14:42, 14:48, 15:15. None
+  happened during a burn. The slow counters went unknown for about a minute after each drop, so each was a
+  reboot. 14:00 and 15:15 line up with firmware commits (OTA). 14:22, 14:42 and 14:48 are not explained.
+
 ## Open questions / next steps
 
 1. Electrical level and connector of the boiler port; boiler model; fill the README TODOs.
 2. Status registers: partly done in session 2 (r84 codes, r85 timer, r137 anti-cycle, r140 burner request, r132
-   boiler pump, demand and blower flags). Still open: the ignition state(s), which needs the link to survive
-   ignition; why "set point met" is shown with the outlet below the r146 target; BMS IN and SYS PUMP SPEED
+   boiler pump, demand and blower flags). Ignition (r84 = 7) seen in session 4. Still open: the long
+   35 s prepurge in session 4; whether r129/r115 really are igniter and gas valve, now that the link stays
+   up through ignition (needs a capture of the 0-255 block at 1 s); why "set point met" is shown with the outlet below the r146 target; BMS IN and SYS PUMP SPEED
    (both 0 so far); r87, r135 and r136.
 3. Parameter block 1006-1295: read more settings from the installer menu (min/max setpoint, differentials,
    fan speeds, pump delay, outdoor reset) and match them. Check whether the display's pump delay is 60 s

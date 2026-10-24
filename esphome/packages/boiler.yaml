@@ -322,8 +322,8 @@ sensor:
       return id(ignition_attempts).state - id(ignitions).state;
 
   # ---- status (registers/controller.yaml, status section; see docs/reverse-engineering-log.md session 2) ----
-  # 4 standby (also during anti-cycle / set point met), 6 prepurge, 9 running, 10 post-purge.
-  # Ignition and lockout codes have not been observed yet; Boiler Status shows them as "Unknown (n)".
+  # 4 standby (also during anti-cycle / set point met), 6 prepurge, 7 ignition, 9 running, 10 post-purge.
+  # Lockout codes have not been observed yet; Boiler Status shows them as "Unknown (n)".
   - platform: modbus_controller
     modbus_controller_id: boiler
     id: status_code
@@ -385,6 +385,7 @@ text_sensor:
           if (id(boiler_pump_output).state > 0) return {"Pump delay"};
           return {"Standby"};
         case 6: return {"Prepurge"};
+        case 7: return {"Ignition"};
         case 9: return {"Running"};
         case 10: return {"Post-purge"};
         default: return {"Unknown (" + to_string((int) s) + ")"};
