@@ -37,13 +37,14 @@ display readings used as ground truth, open questions), `docs/discovery-notes.md
 - r85 phase timer, 0.1 s, counts down (prepurge 17.7 s, post-purge 11.5 s).
 - r118 = 1 heat demand (any zone; DHW is piped as a zone, so the boiler can't tell which one).
 - r140 = 96 burner wanted, 112 held off (no demand, set point met, clocked). Changes 1 s before prepurge.
+- r132 boiler pump output, 0.01 % (100 % from demand until ~60 s post-pump). Display "Rate Out" volts = r80 / 1000.
 - r137 = 1 anti-cycle after flame-out; r129 igniter (guess), r115 gas valve (guess), r105/r128 blower.
 - Demand with no flame for up to ~11 min is normal. A DHW call with its valve closed showed as demand held on
   for 20+ min with only short burns ending in "set point met".
 
 ## Link drops at ignition
 
-The FTDI link goes silent the second ignition starts, every time. Closing and reopening the port in software
+The FTDI link goes silent the second ignition starts, every time (and once during post-purge, 12:26:46). Closing and reopening the port in software
 does not help (tcsetattr EINVAL). Only an unplug and replug does. `tools/probe/08_long_capture.py` retries
 every 10 s and resumes by itself after a replug. Suspect spark noise on the cable.
 

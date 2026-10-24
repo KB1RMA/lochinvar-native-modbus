@@ -165,6 +165,20 @@ sensor:
     filters:
       - multiply: 0.01
 
+  # 100 % from the start of demand until ~60 s after flame-out (post-pump), else 0. The display's
+  # "BLR Pump Out" read 99-100 % while this read 100.00.
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Boiler Pump Output
+    address: 132
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - multiply: 0.01
+
   # ---- slow group: settings (every 5 min = 60 x 5 s) ----
   - platform: modbus_controller
     modbus_controller_id: boiler

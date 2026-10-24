@@ -64,7 +64,8 @@ status:
   - {name: state_flags_a,  address: 138,  encoding: u16, confidence: likely, note: "4 during demand, 8 without"}
   - {name: state_flags_b,  address: 139,  encoding: u16, confidence: likely, note: "16 during demand, 0 without"}
   - {name: burner_request, address: 140,  encoding: u16, confidence: likely, note: "96 when the burner is wanted (goes 96 one second before prepurge), 112 when not, including demand present but held off (clocked / set point met)"}
-  - {name: demand_flags_d, address: [132, 133], encoding: u16, confidence: unknown, note: "10000/1000 with demand; 0 one second before anti-cycle clears"}
+  - {name: boiler_pump_output, address: 132, encoding: u16, unit: percent, scale: 0.01, confidence: likely, mirrors: [133], note: "r133 holds the same in 0.1 % (1000). 100 % from the start of demand until about 60 s after flame-out (post-pump), then 0. Display 'BLR Pump Out' read 99-100 % while this read 10000"}
+  - {name: pump_flag_135, address: 135, encoding: u16, confidence: unknown, note: "1000 with demand, 0 about 30 s after flame-out. Not the system pump (display SYS PUMP SPEED 0 % while this read 1000)"}
   - {name: blower_flags,   address: [105, 128], encoding: u16, confidence: likely, note: "1 from prepurge start to post-purge end"}
   - {name: igniter,        address: 129,  encoding: u16, confidence: guess, note: "1 from the last second of prepurge; link dies just after"}
   - {name: gas_valve,      address: 115,  encoding: u16, confidence: guess, note: "1 at ignition with the first flame signal, 0 one second after flame-out"}

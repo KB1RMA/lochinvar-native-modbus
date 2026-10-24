@@ -103,7 +103,16 @@ anti-cycling to standby in one step (user, ~11:36:40, allowing for display lag).
 - **Fan:** r106 and r107 follow the fan target (2900 rpm purge, 1700 idle in r107); r110 is the measured speed.
 - **r87** counted down about 1 per minute while running and reset to 1440 at standby: a minutes timer, meaning
   unknown. **r176** goes up by 1 each minute; it is probably a clock.
-- The pump has no flag identified yet: it was already running when the log started and its stop was not seen.
+- **Boiler pump (found later, ~12:25):** r132 = boiler pump output in 0.01 % (r133 is the same in 0.1 %). It is 100 %
+  from the start of demand until about 60 s after flame-out (post-pump: 11:29:17 -> 11:30:18), then 0. The 11:24 "pump
+  running in standby" fits too: r132 was 10000 from the 11:23:06 blip until 11:24:09. Display at ~12:24:
+  "BLR Pump Out 99 % cycling to 100 %" while r132 read 10000 steadily.
+- **Other system readings from the display, ~12:24 (burner running, 28-33 %):**
+  - BMS IN 0.0 V and SYS PUMP SPEED 0 %. Not identified; too many registers read 0 to tell.
+  - Rate Out 2.8 V (r80 = 28.6 % at 12:24:20), then 3.2 V (~12:25:30, r80 = 32.8 %). So Rate Out is the firing
+    rate on a 0-10 V scale (V = r80 / 1000), not a separate register.
+  - r135 reads 1000 with demand and drops to 0 about 30 s after flame-out. It is not the system pump, which read
+    0 % at the time.
 
 ### Cycle 3 (11:54) and the software reopen test
 
@@ -163,6 +172,12 @@ the boiler side is:
   demand never drops.
 - **Outlet near or above target with no firing:** heat isn't leaving the boiler loop.
 
+The DHW call ended at 12:26:36 (r118 0, r140 112, r146 32 F). The burner went into post-purge at 12:26:37 after
+about 10 min at 28-33 %, with the outlet at 157 F. **The link then dropped at 12:26:46, during post-purge, not at
+ignition.** That is the first drop seen outside ignition, possibly from a relay or the gas valve switching off.
+Only a replug brought it back (12:42:48). No burner start happened in the gap: r1305, r1307 and r1313 were
+unchanged.
+
 A rule like "r118 = 1 for more than 20 min and burner duty under ~30 %" (time with r66 > 0 divided by demand time)
 would have caught this. A real load like the one after 12:16 keeps the burner lit.
 
@@ -174,9 +189,10 @@ thermostat state from Home Assistant, combined with the boiler-side "not heating
 ## Open questions / next steps
 
 1. Electrical level and connector of the boiler port; boiler model; fill the README TODOs.
-2. Status registers: partly done in session 2 (r84 codes, r85 timer, r137 anti-cycle, r140 burner request, demand and blower
-   flags). Still open: the ignition state(s), which needs the link to survive ignition; the pump flag (note when
-   the circulator stops); the 35 s demand-to-prepurge delay in cycle 2; r87, r132, r133 and r136.
+2. Status registers: partly done in session 2 (r84 codes, r85 timer, r137 anti-cycle, r140 burner request, r132
+   boiler pump, demand and blower flags). Still open: the ignition state(s), which needs the link to survive
+   ignition; why "set point met" is shown with the outlet below the r146 target; BMS IN and SYS PUMP SPEED
+   (both 0 so far); r87, r135 and r136.
 3. Parameter block 1006-1295: read more settings from the installer menu (min/max setpoint, differentials,
    fan speeds, pump delay, outdoor reset) and match them.
 4. Register 1311 (2055) and the weekly schedule at 1223-1250.
