@@ -68,25 +68,26 @@ live:
   - {name: setpoint_sh2_target, address: 143, encoding: temp_f, confidence: likely, note: "equals SH2 setpoint 125"}
   - {name: setpoint_sh3_target, address: 144, encoding: temp_f, confidence: guess, note: "equals SH3 setpoint 125; SH2/SH3 split unverified while both are 125"}
   - {name: setpoint_dhw_target, address: 145, encoding: temp_f, confidence: likely}
-  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown"}
+  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2"}
 
 status:
-  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 9: running, 10: post-purge}, note: "10 began as the flame went out and ended when r85 reached 0"}
-  - {name: state_timer,    address: 85,   encoding: u16, unit: s, scale: 0.1, confidence: guess, note: "counted 11.3 -> 0 s during post-purge"}
-  - {name: burn_minutes_countdown, address: 87, encoding: u16, unit: min, confidence: guess, note: "1440 at standby, down 1 every ~61 s while firing, reset at standby"}
-  - {name: state_flags_a,  address: 138,  encoding: u16, confidence: unknown, note: "4 -> 8 at burner shutdown"}
-  - {name: state_flags_b,  address: 139,  encoding: u16, confidence: unknown, note: "16 -> 0 at burner shutdown"}
-  - {name: state_flags_c,  address: 140,  encoding: u16, confidence: unknown, note: "96 -> 112 at burner shutdown"}
-  - {name: state_flags_d,  address: 136,  encoding: u16, confidence: unknown, note: "8 -> 0 at gas off (10:02:17)"}
-  - {name: gas_valve_flag, address: 118,  encoding: u16, confidence: guess, note: "1 -> 0 at 10:02:17, the instant demand ended, 1 s before flame signal fell"}
-  - {name: output_flags_flame_off, address: [115, 127, 130], encoding: u16, confidence: unknown, note: "1 -> 0 at 10:02:18-19 as the flame went out"}
-  - {name: output_flag_116, address: 116, encoding: u16, confidence: unknown, note: "1 -> 0 at 10:02:27, mid post-purge"}
-  - {name: output_flags_post_purge, address: [90, 105, 128], encoding: u16, confidence: unknown, note: "1 -> 0 at 10:02:30, end of post-purge; blower/burner sequence?"}
-  - {name: pump_output_feedback, address: 81, encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "about 100 percent (9994/10005) while firing and 60 s after flame off, then 0 with r132/r133/r137; was mapped as firing_rate_max"}
-  - {name: pump_output_command, address: 132, encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "10000 while firing, 0 at 10:03:18 (60 s after flame off)"}
-  - {name: analog_output_a, address: 133, encoding: u16, confidence: unknown, note: "1000 -> 0 with r132; maybe 10.00 V"}
-  - {name: analog_output_b, address: 135, encoding: u16, confidence: unknown, note: "1000 -> 0 at 10:02:48, 30 s after flame off"}
-  - {name: post_circulation_flag, address: 137, encoding: u16, confidence: guess, note: "1 from flame off (10:02:18) until 10:03:19"}
+  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 6: prepurge, 9: running, 10: post-purge}, note: "4 also during anti-cycle, clocked and set point met; ignition and lockout codes not seen yet"}
+  - {name: phase_timer,    address: 85,   encoding: u16, unit: s, scale: 0.1, confidence: likely, note: "counts down; prepurge 17.7 s, post-purge 11.3-11.5 s"}
+  - {name: minute_timer,   address: 87,   encoding: u16, unit: min, confidence: unknown, note: "1440 at standby, down 1 every ~61 s while firing, reset at standby"}
+  - {name: heat_demand,    address: 118,  encoding: u16, confidence: likely, note: "1 during a call for heat (any zone)"}
+  - {name: state_flags_a,  address: 138,  encoding: u16, confidence: likely, note: "4 during demand, 8 without"}
+  - {name: state_flags_b,  address: 139,  encoding: u16, confidence: likely, note: "16 during demand, 0 without"}
+  - {name: burner_request, address: 140,  encoding: u16, confidence: likely, note: "96 when the burner is wanted (goes 96 one second before prepurge), 112 when not, including demand present but held off (clocked / set point met)"}
+  - {name: state_flags_d,  address: 136,  encoding: u16, confidence: unknown, note: "8 while firing, 0 at demand end (10:02:17)"}
+  - {name: blower_flags,   address: [105, 128], encoding: u16, confidence: likely, note: "1 from prepurge start to post-purge end"}
+  - {name: igniter,        address: 129,  encoding: u16, confidence: guess, note: "1 from the last second of prepurge; link dies just after"}
+  - {name: gas_valve,      address: 115,  encoding: u16, confidence: guess, note: "1 at ignition with the first flame signal, 0 one second after flame-out"}
+  - {name: burner_flags,   address: [116, 127, 130, 90], encoding: u16, confidence: guess, note: "1 while running; 127/130 off at flame-out, 116 +9 s, 90 at post-purge end"}
+  - {name: anti_cycle,     address: 137,  encoding: u16, confidence: likely, note: "1 from flame-out until the off-delay ends; cleared with the display leaving anti-cycle"}
+  - {name: boiler_pump_output, address: 132, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "commanded. 100 % from the start of demand until about 60 s after flame-out (post-pump), then 0. Display 'BLR Pump Out' read 99-100 % while this read 10000"}
+  - {name: boiler_pump_output_tenths, address: 133, encoding: u16, unit: percent, scale: 0.1, confidence: likely, note: "same as r132 in 0.1 % (1000)"}
+  - {name: boiler_pump_output_actual, address: 81, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "ramps with r132 (3917, 1243, 6674 seen mid-ramp the second r132 switched), jitters 9994/10005 at 100 %; was mapped as firing_rate_max"}
+  - {name: pump_flag_135, address: 135, encoding: u16, confidence: unknown, note: "1000 with demand, 0 about 30 s after flame-out. Not the system pump (display SYS PUMP SPEED 0 % while this read 1000)"}
 
 counters:
   - {name: power_on_hours,    address: 1302, words: 2, encoding: u32, unit: h,     confidence: confirmed}
