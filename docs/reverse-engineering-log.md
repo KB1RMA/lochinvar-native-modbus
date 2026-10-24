@@ -243,6 +243,49 @@ Traps:
 - `tools/probe/07_decode_temps.py` decodes every value with bit 15 set, so counters above 32767 (for
   example ignitions 34928) show up as bogus temperatures.
 
+## Session 3: comparison with the MODB-I-O map and backtest (2026-10-24, desk only)
+
+No reads were sent to the boiler. `cwm12345/lochinvar-modbus` (and `ha-lochinvar`, which vendors it) was
+cloned to a scratch directory and read; nothing from it was run or copied. Its map is for the MODB-I-O
+board, which presents a 16-register summary (input registers 30001-30016, holding 40001-40008, tenths of a
+degree F when the display is in F). No address or encoding carries over to the controller's own port. What
+does carry over is the order of its tables, its live sample values (a Knight Wall Hung at idle, in its
+`tests/conftest.py`) and its code tables from the MODB-I-O manual (status, blocking, lockout 161-240).
+Matches based on order or sample values are weaker evidence than a display reading; the map says which is which.
+
+Each candidate was then backtested with `tools/analysis/backtest.py` against `flame_log.csv` and
+`long/2026-10-24.csv`. Counts are seconds of boiler time with the link up (each state weighted by how long
+it held), not rows. The replay pauses on `link` drop rows and on gaps over 8 s (the 11:24:52 and 11:31:44
+drops have no `link` row), and resumes at the next `snapshot` or `link,ok`. An earlier ad-hoc replay
+skipped 11:57-12:06 and counted the 11:31:44 drop as 250 s of stale state; the numbers here are from the
+fixed one.
+
+Held up:
+- r146 = 32.0 F if and only if r118 = 0 (all 600 s of session 1, all 3383 s of session 2). The MODB-I-O
+  outlet setpoint uses the same "32 = no setpoint" convention. r147 = r146 throughout, so whether r147 is the
+  system setpoint (equal with no system sensor) can't be told here.
+- A MODB-style status built from native registers (r84, then r137 anti-cycle, r118 with r140 = 112 "demand
+  held off", r118 "demand", r132 > 0 "pump delay", else idle) matches every display note that has data: the
+  11:24 "standby" with the circulator running is pump delay (their status 33), and anti-cycle ends 20 s
+  before the display leaves it. The 11:57 "clocked" and 11:58 "set point met" notes are both "demand, held
+  off"; the registers do not separate them. This is now the ESPHome Boiler Status.
+
+Relabelled:
+- r127 (and r130, identical) = 1 exactly when r84 = 9. It is the run state, not a separate flame input.
+- r67 reads 1512 only with the pump on and 1509 otherwise, flickering from the second r135 drops until the
+  pump stops. An analog value nudged by relay load; meaning unknown.
+- r104 correlates 0.98-0.998 with r110 and r80 while running, with a non-constant ratio: maybe fan PWM.
+- r111 = 50 while running and 250 otherwise, r112 = -r111 always: probably a fan ramp limit.
+
+Untestable with these captures (nothing changed): r121-r125 = 1 and r120/r126 = 0 throughout, which fits
+the MODB-I-O idle input word 62 (flow, gas pressure, louver, air pressure, blocked drain on; high limit off),
+r157/r159 (tank, system supply by table order), r68/r70/r77 (no sensor), r134 (system pump speed by position).
+
+New observation: in all four drops that happened during prepurge (11:31:44, 11:54:32, 12:06:01, 12:16:10)
+the last poll before the drop already shows a flame signal of 1.5-2.2 uA with r84 still 6. So the link dies
+at the moment the flame rod first sees current, which is when the spark is running. That fits the
+spark-noise suspicion; it does not tell spark noise on the flame rod apart from a real early flame.
+
 ## Open questions / next steps
 
 1. Electrical level and connector of the boiler port; boiler model; fill the README TODOs.
@@ -254,6 +297,10 @@ Traps:
    fan speeds, pump delay, outdoor reset) and match them. Check whether the display's pump delay is 60 s
    (r81/r132) and min/max fan is 1700/8200.
 4. Register 1311 (2055) and the weekly schedule at 1223-1250.
-5. Check `cwm12345/lochinvar-modbus` status/lockout code tables against our status registers.
+5. Done in session 3: no MODB-I-O code register exists on the native port; see that section.
+   If a lockout ever happens, check whether r84 shows a value from the MODB-I-O lockout table (161-240).
 6. Build the poller: read-only, blocks of at most 50, fast poll of 62-75/80/110/84, slow poll of counters
    and settings, `lochinvar/status` availability topic, reconnect handling for the adapter wedge.
+7. Safety inputs: catch r120-r126 when a switch trips (or during a lockout) to confirm or drop the
+   MODB-I-O order. Rerun `tools/analysis/backtest.py` on any new capture.
+8. r147 vs r146: only separable with a system supply sensor fitted.

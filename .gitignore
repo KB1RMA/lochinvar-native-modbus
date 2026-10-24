@@ -2,3 +2,9 @@ esphome/secrets.yaml
 .esphome/
 __pycache__/
 .venv/
+
+# Capture logs from the boiler stay local; they are not published.
+captures/
+
+# Claude Code local settings and worktrees
+.claude/

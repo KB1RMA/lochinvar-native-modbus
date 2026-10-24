@@ -68,5 +68,8 @@ every 10 s and resumes by itself after a replug. Suspect spark noise on the cabl
 ## Related
 
 - `cwm12345/lochinvar-modbus` and `cwm12345/ha-lochinvar` on GitHub target the MODB-I-O board
-  (different map). Their status/blocking/lockout code tables may help decode registers 84 and 138-140.
-  Nothing from them has been run or copied.
+  (different map). Compared in session 3 (docs/reverse-engineering-log.md): no address or encoding
+  overlap and no MODB-style status/blocking/lockout register on the native port. Still useful: the lockout
+  code table (161-240) if a lockout shows up, and their table order, which placed r157/r159 and r121-r125
+  (guesses). Nothing from them has been run or copied.
+- `tools/analysis/backtest.py` replays captures offline and checks the candidate mappings; rerun it on new captures.

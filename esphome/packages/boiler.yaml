@@ -41,6 +41,8 @@ modbus_controller:
 # ---------------------------------------------------------------------------------------------
 # Temperature decoding (registers/controller.yaml, encoding temp_f):
 #   F = ((raw & 0x7FFF) - 9468) / 25, and raw == 0x8000 means no sensor.
+#   raw == 0 (-378.7 F) is never a real reading; one came through on the first poll after a reboot
+#   on 2026-10-24, so it is dropped too.
 # ESPHome hands lambdas the parsed value `x` as a float.
 # ---------------------------------------------------------------------------------------------
 
@@ -48,6 +50,7 @@ sensor:
   # ---- fast group (every 5 s) ----
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: outlet_temp
     name: Outlet Temperature
     address: 62
     register_type: holding
@@ -57,11 +60,12 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     lambda: |-
-      if (x == 32768) return NAN;
+      if (x == 32768 || x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: inlet_temp
     name: Inlet Temperature
     address: 73
     register_type: holding
@@ -71,7 +75,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     lambda: |-
-      if (x == 32768) return NAN;
+      if (x == 32768 || x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -85,7 +89,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     lambda: |-
-      if (x == 32768) return NAN;
+      if (x == 32768 || x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -99,7 +103,7 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     lambda: |-
-      if (x == 32768) return NAN;
+      if (x == 32768 || x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -141,6 +145,7 @@ sensor:
   # "BLR Pump Out" read 99-100 % while this read 100.00.
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: boiler_pump_output
     name: Boiler Pump Output
     address: 132
     register_type: holding
@@ -150,6 +155,20 @@ sensor:
     accuracy_decimals: 0
     filters:
       - multiply: 0.01
+
+  # The boiler display's Delta T is outlet - inlet (r62 - r73); it matched in session 1 allowing for
+  # display lag. Computed here from the two readings above, so it costs no extra Modbus reads.
+  - platform: template
+    name: Delta T
+    unit_of_measurement: "°F"
+    device_class: temperature_delta
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 5s
+    icon: mdi:thermometer-lines
+    lambda: |-
+      if (isnan(id(outlet_temp).state) || isnan(id(inlet_temp).state)) return NAN;
+      return id(outlet_temp).state - id(inlet_temp).state;
 
   # ---- slow group: settings (boiler_slow, every 5 min) ----
   - platform: modbus_controller
@@ -163,6 +182,7 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     lambda: |-
+      if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -176,6 +196,7 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     lambda: |-
+      if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -189,6 +210,7 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     lambda: |-
+      if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -202,6 +224,7 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     lambda: |-
+      if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -215,6 +238,7 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     lambda: |-
+      if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   - platform: modbus_controller
@@ -228,6 +252,7 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
     lambda: |-
+      if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   # ---- slow group: lifetime counters (boiler_slow; 32-bit, high word at the lower address) ----
@@ -342,6 +367,10 @@ sensor:
     disabled_by_default: true
 
 text_sensor:
+  # r84 = 4 covers several display states. They are split here the way tools/analysis/backtest.py
+  # does, which matched the display notes from session 2: anti-cycle (r137), demand held off
+  # (r118 with r140 = 112; the display shows "clocked" or "set point met", which the registers
+  # can't tell apart), and pump delay (no demand, r132 still on).
   - platform: template
     name: Boiler Status
     update_interval: 5s
@@ -349,7 +378,12 @@ text_sensor:
       float s = id(status_code).state;
       if (isnan(s)) return {"Unavailable"};
       switch ((int) s) {
-        case 4: return {"Standby"};
+        case 4:
+          if (id(anti_cycle).state) return {"Anti-cycle"};
+          if (id(heat_demand).state && !id(burner_request).state) return {"Demand, held off"};
+          if (id(heat_demand).state) return {"Demand"};
+          if (id(boiler_pump_output).state > 0) return {"Pump delay"};
+          return {"Standby"};
         case 6: return {"Prepurge"};
         case 9: return {"Running"};
         case 10: return {"Post-purge"};
@@ -363,6 +397,7 @@ binary_sensor:
   # r118 = 1 while any zone calls for heat. The boiler cannot tell which zone (DHW is piped as a zone).
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: heat_demand
     name: Heat Demand
     address: 118
     register_type: holding
@@ -373,12 +408,23 @@ binary_sensor:
   # The difference is bit 4, set = held off, so the bit is inverted.
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: burner_request
     name: Burner Request
     address: 140
     register_type: holding
     bitmask: 0x0010
     filters:
       - invert:
+
+  # r137 = 1 from flame-out until the off-delay ends; it cleared with the display leaving anti-cycle.
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: anti_cycle
+    name: Anti-Cycle
+    address: 137
+    register_type: holding
+    bitmask: 0x0001
+    icon: mdi:timer-sand
 
   # Flame signal read 0 with the burner off and 2.1 uA within a second of ignition.
   - platform: template

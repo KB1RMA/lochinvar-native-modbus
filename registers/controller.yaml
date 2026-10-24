@@ -40,6 +40,7 @@ encodings:
       (131.7 -> 131, 129.7 -> 129). The up-to-3 F gaps seen while firing match register values 10-20 s
       earlier, so they are most likely display lag, not a scale error. Not yet checked at steady high fire.
     no_sensor: 0x8000
+    invalid: 0         # -378.7 F; seen once on r73 on the first ESPHome poll after a reboot, so treat as no reading
   u16:
     formula: "raw"
   u32:
@@ -57,10 +58,15 @@ live:
   - {name: exhaust_temp_2, address: 65,   encoding: temp_f, confidence: likely, note: "second flue thermistor; within 0.9 F of r63"}
   - {name: exhaust_temp_max, address: 156, encoding: temp_f, confidence: guess, note: "equals max(r63, r65) in 92 percent of samples"}
   - {name: outdoor_temp,   address: 75,   encoding: temp_f, confidence: confirmed, mirrors: [158]}
+  - {name: tank_temp,      address: 157,  encoding: temp_f, confidence: guess, note: "always 0x8000 (no sensor; DHW is a zone here). Placed by order only: the 154-159 mirror block runs outlet, inlet, flue, ?, outdoor, ?, and the MODB-I-O sensor table runs tank, outdoor, system supply"}
+  - {name: system_supply_temp, address: 159, encoding: temp_f, confidence: guess, note: "always 0x8000 (no sensor). Placed by order only, see tank_temp"}
+  - {name: cabinet_temp,   address: 74,   encoding: temp_f, confidence: guess, note: "79-84 F, rises slowly while firing (corr 0.89 with r63 in session 2, 0.43 in session 1). Not a sensor in the MODB-I-O map; maybe board or cabinet air"}
   - {name: flame_signal,   address: 66,   encoding: u16, unit: nA, scale: 0.001, publish_unit: uA, confidence: confirmed, note: "12688 when display read 12.7 uA"}
   - {name: fan_speed,      address: 110,  encoding: u16, unit: rpm, confidence: confirmed}
   - {name: fan_speed_target, address: 89, encoding: u16, unit: rpm, confidence: likely, mirrors: [106, 149], note: "= 1700 + (r80/100 - 10) * 6500/90 within 50 rpm"}
   - {name: fan_speed_command, address: 107, encoding: u16, unit: rpm, confidence: likely, note: "same curve from r131; about 1 s ahead of r89; clamped to min fan 1700 at idle"}
+  - {name: fan_drive,      address: 104,  encoding: u16, confidence: guess, note: "maybe fan PWM in 0.1 %: about 145 in prepurge, 604 at 85 % fire. Corr 0.98-0.998 with r110 and r80 while running, but the ratio to rpm is not constant. Redundant with fan_speed; do not publish"}
+  - {name: fan_ramp_limit, address: 111,  encoding: u16, confidence: guess, note: "exactly 50 while running (r84 = 9), 250 in every other state, both sessions; r112 is always -r111 (signed16). Constant per state; do not publish"}
   - {name: fan_tach_period, address: 108, encoding: u16, confidence: likely, note: "r108 * r110 = 3.75e6; inverse of fan speed, stale value at idle; do not publish"}
   - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "8516 when display read 85 percent; display lags by roughly 10 s; 10 percent = min fan, 100 percent = max fan"}
   - {name: firing_rate_requested, address: 131, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "always a multiple of 10; about 1 s ahead of r80"}
@@ -68,10 +74,10 @@ live:
   - {name: setpoint_sh2_target, address: 143, encoding: temp_f, confidence: likely, note: "equals SH2 setpoint 125"}
   - {name: setpoint_sh3_target, address: 144, encoding: temp_f, confidence: guess, note: "equals SH3 setpoint 125; SH2/SH3 split unverified while both are 125"}
   - {name: setpoint_dhw_target, address: 145, encoding: temp_f, confidence: likely}
-  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2"}
+  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2. Backtest: 32.0 F if and only if r118 = 0 in every sample of both sessions, so 32.0 F means no setpoint (the MODB-I-O outlet setpoint uses the same convention); publish none, not 32. r147 equalled r146 in 100 percent of samples; it may be the system setpoint (equal with no system sensor), untested"}
 
 status:
-  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 6: prepurge, 9: running, 10: post-purge}, note: "4 also during anti-cycle, clocked and set point met; ignition and lockout codes not seen yet"}
+  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 6: prepurge, 9: running, 10: post-purge}, note: "4 also during anti-cycle, clocked and set point met; ignition and lockout codes not seen yet. If a lockout shows here, compare with the MODB-I-O lockout table (161-240, e.g. 233 no flame after ignition) in cwm12345/lochinvar-modbus enums.py; unverified on this controller"}
   - {name: phase_timer,    address: 85,   encoding: u16, unit: s, scale: 0.1, confidence: likely, note: "counts down; prepurge 17.7 s, post-purge 11.3-11.5 s"}
   - {name: minute_timer,   address: 87,   encoding: u16, unit: min, confidence: unknown, note: "1440 at standby, down 1 every ~61 s while firing, reset at standby"}
   - {name: heat_demand,    address: 118,  encoding: u16, confidence: likely, note: "1 during a call for heat (any zone)"}
@@ -82,11 +88,15 @@ status:
   - {name: blower_flags,   address: [105, 128], encoding: u16, confidence: likely, note: "1 from prepurge start to post-purge end"}
   - {name: igniter,        address: 129,  encoding: u16, confidence: guess, note: "1 from the last second of prepurge; link dies just after"}
   - {name: gas_valve,      address: 115,  encoding: u16, confidence: guess, note: "1 at ignition with the first flame signal, 0 one second after flame-out"}
-  - {name: burner_flags,   address: [116, 127, 130, 90], encoding: u16, confidence: guess, note: "1 while running; 127/130 off at flame-out, 116 +9 s, 90 at post-purge end"}
+  - {name: burner_running, address: [127, 130], encoding: u16, confidence: likely, note: "1 exactly when r84 = 9 (100 percent of samples, both sessions); off at flame-out. Not a separate flame input: flame signal r66 rose at 11:31:44 in prepurge with r127 still 0. Adds nothing beyond r84; use r66 for flame"}
+  - {name: burner_flags,   address: [116, 90], encoding: u16, confidence: guess, note: "1 while running; 116 off 9 s after flame-out, 90 at post-purge end"}
+  - {name: safety_inputs,  address: [121, 122, 123, 124, 125], encoding: u16, confidence: guess, note: "1 in every sample, through prepurge and the blower; r120 and r126 always 0. The pattern matches the MODB-I-O idle input word 62 (flow, gas pressure, louver proving, air pressure, blocked drain on; auto-reset high limit off), which would make r121-r125 those five switches in that order and r126 the high limit. Untested: nothing ever changed. A tripped switch or lockout would settle it"}
+  - {name: relay_load_analog, address: 67, encoding: u16, confidence: unknown, note: "1512 whenever the pump is on (100 percent of 1512 samples), 1509 with it off; flickers between them from the second r135 drops until the pump stops. An analog reading nudged by relay load; meaning unknown, do not publish"}
   - {name: anti_cycle,     address: 137,  encoding: u16, confidence: likely, note: "1 from flame-out until the off-delay ends; cleared with the display leaving anti-cycle"}
   - {name: boiler_pump_output, address: 132, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "commanded. 100 % from the start of demand until about 60 s after flame-out (post-pump), then 0. Display 'BLR Pump Out' read 99-100 % while this read 10000"}
   - {name: boiler_pump_output_tenths, address: 133, encoding: u16, unit: percent, scale: 0.1, confidence: likely, note: "same as r132 in 0.1 % (1000)"}
   - {name: boiler_pump_output_actual, address: 81, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "ramps with r132 (3917, 1243, 6674 seen mid-ramp the second r132 switched), jitters 9994/10005 at 100 %; was mapped as firing_rate_max"}
+  - {name: system_pump_speed, address: 134, encoding: u16, confidence: guess, note: "always 0, next to the boiler pump registers 132/133; display SYS PUMP SPEED read 0 percent. Placed by position only"}
   - {name: pump_flag_135, address: 135, encoding: u16, confidence: unknown, note: "1000 with demand, 0 about 30 s after flame-out. Not the system pump (display SYS PUMP SPEED 0 % while this read 1000)"}
 
 counters:
@@ -121,5 +131,8 @@ unmapped_regions:
   - {range: [150, 151], note: "r150 signed, about +/-7, maybe a rate of change; r151 rises in steps while firing."}
   - {range: [172, 176], note: "Controller clock (20, 5, 18, hour, minute). Runs, but about 54 min slow and the date is wrong; do not use as a timestamp."}
   - {range: [500, 502], note: "Small values 6, 11, 2"}
+  - {range: [68, 77], note: "r68, r70, r77 always 0x8000 (no sensor): likely the live copies of the tank, system supply and DHW recirculation sensors (see tank_temp). r69 = 503, r71 = 0"}
+  - {range: [76, 78], note: "r76 and r78 are 0 except one-second blips (10-63, steps of about 10.5); r76 = r160 + 21 when both blip. Probably read skew; do not publish"}
+  - {range: [160, 161], note: "Same one-second blips as r76 (r160 0-52, r161 116/158). Do not publish"}
   - {range: [956, 1005], note: "exception 2 (illegal address)"}
   - {range: [1406, 2047], note: "mostly exception 2"}
