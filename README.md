@@ -32,6 +32,20 @@ temperature encoding. For MODB-I-O owners see
 - `esphome/lochinvar.yaml`: read-only ESP32 config (Modbus RTU to MQTT). Copy `esphome/secrets.example.yaml`
   to `secrets.yaml`. `tools/check_esphome.py` checks it against the map and rejects write components.
 
+## Long captures for mapping
+
+`tools/probe/08_long_capture.py` logs every readable register (function 03 only) from a laptop over
+hours or days. It reads 0-255 each second and the rest of the map (256-955, 1006-1405) each minute,
+and writes only changes to `captures/long/YYYY-MM-DD.csv` as `time,addr,value`. Each file starts with a full snapshot.
+
+```
+caffeinate -is python3 -I tools/probe/08_long_capture.py
+```
+
+Keep the Mac on power: `caffeinate -s` only prevents sleep on AC, and closing the lid on battery still
+sleeps it. While it runs, type what the display shows (status text, firing rate) and press Enter. Each
+line is logged as a timestamped `note` row. `--hours N` stops after N hours; `--port` picks the device.
+
 ## Tested hardware
 
 | Controller firmware | Boiler model |

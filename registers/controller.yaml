@@ -51,16 +51,25 @@ live:
   - {name: fan_speed,      address: 110,  encoding: u16, unit: rpm, confidence: confirmed}
   - {name: fan_speed_target, address: 89, encoding: u16, unit: rpm, confidence: likely, mirrors: [106, 107, 149]}
   - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, mirrors: [131], note: "8516 when display read 85 percent; display lags by roughly 10 s"}
-  - {name: firing_rate_max, address: 81,  encoding: u16, unit: percent, scale: 0.01, confidence: guess, mirrors: [132], note: "about 100.00 percent"}
+  - {name: firing_rate_max, address: 81,  encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "about 100.00 percent; r132 is not a mirror (drops to 0 with no demand, session 2)"}
   - {name: setpoint_sh2_live, address: 143, encoding: temp_f, confidence: likely, mirrors: [144], note: "copy of SH2/SH3 setpoint"}
   - {name: setpoint_dhw_live, address: 145, encoding: temp_f, confidence: likely}
 
 status:
-  - {name: status_code,    address: 84,   encoding: u16, confidence: guess, note: "4 in standby, 9/10 while burning"}
-  - {name: state_flags_a,  address: 138,  encoding: u16, confidence: unknown, note: "4 -> 8 at burner shutdown"}
-  - {name: state_flags_b,  address: 139,  encoding: u16, confidence: unknown, note: "16 -> 0 at burner shutdown"}
-  - {name: state_flags_c,  address: 140,  encoding: u16, confidence: unknown, note: "96 -> 112 at burner shutdown"}
-  - {name: output_flags,   address: [115, 116, 118, 127, 128, 130, 90, 105], encoding: u16, confidence: unknown, note: "1 while running, 0 in standby; likely pump/valve/blower/ignition"}
+  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, note: "4 standby (also during anti-cycle), 6 prepurge, 9 running, 10 post-purge; ignition codes not seen yet"}
+  - {name: phase_timer,    address: 85,   encoding: u16, unit: s, scale: 0.1, confidence: likely, note: "counts down; prepurge 17.7 s, post-purge 11.5 s"}
+  - {name: anti_cycle,     address: 137,  encoding: u16, confidence: likely, note: "1 from flame-out until the off-delay ends; cleared with the display leaving anti-cycle"}
+  - {name: heat_demand,    address: 118,  encoding: u16, confidence: likely, note: "1 during a call for heat"}
+  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "161.2 F during demand (outdoor reset?), 32 F with no demand"}
+  - {name: state_flags_a,  address: 138,  encoding: u16, confidence: likely, note: "4 during demand, 8 without"}
+  - {name: state_flags_b,  address: 139,  encoding: u16, confidence: likely, note: "16 during demand, 0 without"}
+  - {name: burner_request, address: 140,  encoding: u16, confidence: likely, note: "96 when the burner is wanted (goes 96 one second before prepurge), 112 when not, including demand present but held off (clocked / set point met)"}
+  - {name: demand_flags_d, address: [132, 133], encoding: u16, confidence: unknown, note: "10000/1000 with demand; 0 one second before anti-cycle clears"}
+  - {name: blower_flags,   address: [105, 128], encoding: u16, confidence: likely, note: "1 from prepurge start to post-purge end"}
+  - {name: igniter,        address: 129,  encoding: u16, confidence: guess, note: "1 from the last second of prepurge; link dies just after"}
+  - {name: gas_valve,      address: 115,  encoding: u16, confidence: guess, note: "1 at ignition with the first flame signal, 0 one second after flame-out"}
+  - {name: burner_flags,   address: [116, 127, 130, 90], encoding: u16, confidence: guess, note: "1 while running; 127/130 off at flame-out, 116 +9 s, 90 at post-purge end"}
+  - {name: minute_timer,   address: 87,   encoding: u16, unit: min, confidence: unknown, note: "1440 at standby, counts down ~1/min while running"}
 
 counters:
   - {name: power_on_hours,    address: 1302, words: 2, encoding: u32, unit: h,     confidence: confirmed}
