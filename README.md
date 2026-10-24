@@ -29,6 +29,8 @@ temperature encoding. For MODB-I-O owners see
 - `captures/`: raw scans and logs the map was derived from.
 - `docs/discovery-notes.md`: working notes from the reverse engineering session.
 - `tools/check_registers.py`: sanity-checks the map file.
+- `esphome/lochinvar.yaml`: read-only ESP32 config (Modbus RTU to MQTT). Copy `esphome/secrets.example.yaml`
+  to `secrets.yaml`. `tools/check_esphome.py` checks it against the map and rejects write components.
 
 ## Tested hardware
 
