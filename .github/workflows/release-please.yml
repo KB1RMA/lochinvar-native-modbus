@@ -1,0 +1,52 @@
+name: Release Please
+run-name: Release Please
+
+# On every push to main, release-please keeps a release pull request open
+# with the next version and changelog, worked out from Conventional Commit
+# messages. Merging that pull request tags the commit (vX.Y.Z) and publishes a
+# GitHub release. The tag is the release: ESPHome fetches packages straight
+# from it (github://.../esphome/packages/boiler.yaml@vX.Y.Z), so there is
+# nothing else to build or upload. Besides CHANGELOG.md and version.txt, the
+# release pull request bumps every line marked `x-release-please-version`: the
+# package's project version (shown in Home Assistant's device info) and the
+# refs in README.md.
+#
+# release-please acts as a GitHub App rather than with the default
+# GITHUB_TOKEN. Events made with GITHUB_TOKEN start no workflows, so the
+# release pull request would never get the status checks the default branch's
+# ruleset requires. The app needs read and write access to contents, issues
+# and pull requests. Its client ID and private key are the
+# RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY secrets.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {} # everything is done with the app's token
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write # tag and publish releases, push the release branch
+          permission-issues: write # create the autorelease labels
+          permission-pull-requests: write # open and update the release pull request
+      - uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
