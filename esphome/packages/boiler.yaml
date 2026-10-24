@@ -367,7 +367,7 @@ binary_sensor:
     address: 118
     register_type: holding
     bitmask: 0x0001
-    device_class: heat
+    icon: mdi:thermostat
 
   # r140 = 96 when the burner is wanted, 112 when held off (no demand, set point met, clocked).
   # The difference is bit 4, set = held off, so the bit is inverted.
@@ -383,7 +383,7 @@ binary_sensor:
   # Flame signal read 0 with the burner off and 2.1 uA within a second of ignition.
   - platform: template
     name: Flame Present
-    device_class: heat
+    icon: mdi:fire
     lambda: |-
       if (isnan(id(flame_signal).state)) return {};
       return id(flame_signal).state > 0.5f;
