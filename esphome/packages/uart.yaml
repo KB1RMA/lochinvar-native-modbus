@@ -1,0 +1,20 @@
+# Transport: the ESP's own UART pins, through a transceiver. Provides the UART `boiler_uart` that
+# boiler.yaml uses. Set uart_tx_pin and uart_rx_pin in the device config's substitutions.
+#
+# WIRING: the electrical level of the boiler port is NOT yet known (RS-232, RS-485 or TTL), and this
+# transport has not been tested against a boiler. Do not connect an ESP32 directly. Use the matching
+# transceiver:
+#   RS-232 -> MAX3232 module     RS-485 -> MAX485/SP3485 module (auto-direction recommended)
+
+substitutions:
+  uart_tx_pin: GPIO17
+  uart_rx_pin: GPIO16
+
+uart:
+  id: boiler_uart
+  tx_pin: ${uart_tx_pin}
+  rx_pin: ${uart_rx_pin}
+  baud_rate: 19200
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1

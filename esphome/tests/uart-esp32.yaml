@@ -1,0 +1,21 @@
+# CI build of the GPIO UART transport on a classic ESP32 with the Arduino framework, so both
+# transports and both frameworks are compiled. Not a working device: the Wi-Fi credentials are
+# placeholders.
+
+esphome:
+  name: lochinvar-uart-test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+wifi:
+  ssid: ci
+  password: ci-password
+
+packages:
+  transport: !include ../packages/uart.yaml
+  boiler: !include ../packages/boiler.yaml
