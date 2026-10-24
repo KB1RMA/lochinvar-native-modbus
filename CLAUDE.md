@@ -43,7 +43,7 @@ display readings used as ground truth, open questions), `docs/discovery-notes.md
 - 32-bit counters store the high word at the even address, the number you want is usually in the odd one.
 - Temperature formula is exact for parameters; live sensors differed from the display by up to ~3 F while
   firing, which matches display lag (idle readings match within the display's truncation).
-- Home Assistant has strap-on pipe probes (outlet/return probes). They read
+- Strap-on pipe probes on the boiler outlet and return (in Home Assistant) read
   7-12 F low and lag by ~1 min: good for telling sensors apart, not for calibration.
 - A boiler USB menu entry reading "waiting device..." exists on the controller; it is unrelated to this serial link.
 

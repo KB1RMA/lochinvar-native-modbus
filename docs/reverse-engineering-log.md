@@ -214,11 +214,11 @@ Temperature accuracy: at idle the formula matches the display within its truncat
 register values 10-20 s earlier, the same lag seen on firing rate. So the "about 3 F error" is most likely
 display lag. One display reading at steady high fire would confirm it.
 
-Home Assistant pipe probes (outlet/return probes, strap-on): over the
+Home Assistant pipe probes (strap-on, on the boiler outlet and return): over the
 log window the return probe tracks r73 with a spread of about 1 F (mean 7 F low, best at about 30-60 s lag),
 while the difference to r63 swings 0-47 F. This independently confirms r73 = inlet. The outlet probe reads
 about 12 F below r62. The probes lag and read low, so they confirm which register is which but cannot
-calibrate the formula. the HA boiler-firing sensor stayed "on" through the 10:02:17 shutdown, so it is not
+calibrate the formula. A separate Home Assistant "boiler firing" sensor stayed "on" through the 10:02:17 shutdown, so it is not
 a usable burner-state reference.
 
 New decodes (see the map for confidence):
