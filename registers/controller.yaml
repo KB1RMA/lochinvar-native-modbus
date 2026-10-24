@@ -1,0 +1,91 @@
+# Lochinvar boiler controller: Modbus RTU register map
+#
+# Source: reverse-engineered from the controller's built-in serial port (no MODB-I-O board).
+# Every entry was observed with function 03 reads only. Nothing here is writable by design.
+#
+# confidence:
+#   confirmed - matched a value read off the boiler display
+#   likely    - behaves as described, partial or approximate display match
+#   guess     - inferred from behaviour only
+#   unknown   - changes or holds a value, meaning not identified
+
+source: controller-native
+device:
+  controller_firmware: "SIT 547_00 May 15 2018"   # decoded from registers 30-44
+  tested_models: []                                # TODO: add boiler model
+
+link:
+  protocol: modbus-rtu
+  baud: 19200
+  data_bits: 8
+  parity: none
+  stop_bits: 1
+  slave_id: 1
+  read_function: 3          # holding registers; function 4 returns exception 1
+  max_block: 50             # 50 register reads work; blocks touching unmapped addresses return exception 2
+  electrical_level: unknown # TODO: RS-232 / RS-485 / TTL; an FTDI FT232R adapter worked
+
+# How raw 16-bit values become engineering units.
+encodings:
+  temp_f:
+    description: Temperature in degrees F. Bit 15 is a flag; 0x8000 alone means no sensor.
+    formula: "((raw & 0x7FFF) - 9468) / 25"
+    unit: degF
+    note: Exact for parameters and outdoor. Live water/flue sensors read up to ~3 F off versus the display.
+    no_sensor: 0x8000
+  u16:
+    formula: "raw"
+  u32:
+    description: Two registers, high word at the lower address.
+  signed16:
+    formula: "raw if raw < 32768 else raw - 65536"
+  ascii_swapped:
+    description: ASCII text, two characters per register, characters swapped within each register.
+
+live:
+  - {name: outlet_temp,    address: 62,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [64, 154]}
+  - {name: inlet_temp,     address: 73,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [155], note: "outlet - inlet matched display delta T; swapped with exhaust once during discovery"}
+  - {name: exhaust_temp,   address: 63,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [65, 156], note: "falls fast as firing rate drops"}
+  - {name: outdoor_temp,   address: 75,   encoding: temp_f, confidence: confirmed, mirrors: [158]}
+  - {name: flame_signal,   address: 66,   encoding: u16, unit: nA, scale: 0.001, publish_unit: uA, confidence: confirmed, note: "12688 when display read 12.7 uA"}
+  - {name: fan_speed,      address: 110,  encoding: u16, unit: rpm, confidence: confirmed}
+  - {name: fan_speed_target, address: 89, encoding: u16, unit: rpm, confidence: likely, mirrors: [106, 107, 149]}
+  - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, mirrors: [131], note: "8516 when display read 85 percent; display lags by roughly 10 s"}
+  - {name: firing_rate_max, address: 81,  encoding: u16, unit: percent, scale: 0.01, confidence: guess, mirrors: [132], note: "about 100.00 percent"}
+  - {name: setpoint_sh2_live, address: 143, encoding: temp_f, confidence: likely, mirrors: [144], note: "copy of SH2/SH3 setpoint"}
+  - {name: setpoint_dhw_live, address: 145, encoding: temp_f, confidence: likely}
+
+status:
+  - {name: status_code,    address: 84,   encoding: u16, confidence: guess, note: "4 in standby, 9/10 while burning"}
+  - {name: state_flags_a,  address: 138,  encoding: u16, confidence: unknown, note: "4 -> 8 at burner shutdown"}
+  - {name: state_flags_b,  address: 139,  encoding: u16, confidence: unknown, note: "16 -> 0 at burner shutdown"}
+  - {name: state_flags_c,  address: 140,  encoding: u16, confidence: unknown, note: "96 -> 112 at burner shutdown"}
+  - {name: output_flags,   address: [115, 116, 118, 127, 128, 130, 90, 105], encoding: u16, confidence: unknown, note: "1 while running, 0 in standby; likely pump/valve/blower/ignition"}
+
+counters:
+  - {name: power_on_hours,    address: 1302, words: 2, encoding: u32, unit: h,     confidence: confirmed}
+  - {name: ignition_attempts, address: 1304, words: 2, encoding: u32,              confidence: confirmed}
+  - {name: ignitions,         address: 1306, words: 2, encoding: u32,              confidence: confirmed}
+  - {name: sh_run_time,       address: 1308, words: 2, encoding: u32, unit: h,     confidence: confirmed}
+  - {name: counter_1310,      address: 1310, words: 2, encoding: u32,              confidence: unknown, note: "value 2055 at 10:15"}
+  - {name: sh_cycles,         address: 1312, words: 2, encoding: u32,              confidence: confirmed}
+  - {name: dhw_cycles,        address: 1314, words: 2, encoding: u32,              confidence: guess, note: "0 and DHW cycles on display was 0"}
+
+settings:
+  - {name: setpoint_dhw,     address: 1286, encoding: temp_f, confidence: confirmed}
+  - {name: setpoint_sh1,     address: 1287, encoding: temp_f, confidence: confirmed}
+  - {name: setpoint_sh2,     address: 1288, encoding: temp_f, confidence: confirmed}
+  - {name: setpoint_sh3,     address: 1289, encoding: temp_f, confidence: confirmed}
+  - {name: high_limit_auto_reset,   address: 1291, encoding: temp_f, confidence: confirmed}
+  - {name: high_limit_manual_reset, address: [1292, 1293], encoding: temp_f, confidence: confirmed, note: "two identical copies"}
+  - {name: firing_rate_min_param, address: [1097, 1146], encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "1700; live regs 114 holds the same"}
+  - {name: firing_rate_max_param, address: [1098, 1150], encoding: u16, unit: percent, scale: 0.01, confidence: guess, note: "8200; live regs 113 holds the same"}
+
+info:
+  - {name: firmware_string, address: 30, words: 15, encoding: ascii_swapped, confidence: confirmed}
+
+unmapped_regions:
+  - {range: [1006, 1295], note: "Parameter block; mostly unlabeled. Includes temp_f values, percent values, timers and what looks like a weekly schedule at 1223-1250 (steps of 1440, minutes)."}
+  - {range: [500, 502], note: "Small values 6, 11, 2"}
+  - {range: [956, 1005], note: "exception 2 (illegal address)"}
+  - {range: [1406, 2047], note: "mostly exception 2"}
