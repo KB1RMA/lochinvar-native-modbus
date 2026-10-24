@@ -14,17 +14,31 @@ display readings used as ground truth, open questions), `docs/discovery-notes.md
 - Ask before transmitting anything new to the boiler.
 - Don't commit or push without being asked.
 
+## ESPHome package and releases
+
+- The published unit is an ESPHome package: `esphome/packages/boiler.yaml` (Modbus + entities, needs a UART
+  with id `boiler_uart`) plus a transport (`usb-ft232.yaml`, `uart.yaml`). `esphome/lochinvar.yaml` is the
+  user's own device built from them; `esphome/tests/` holds extra configs CI compiles.
+- `tools/check_esphome.py` scans every ESPHome YAML file: no write components or write keys, every address in
+  the map, and the package `project.version` must equal `.release-please-manifest.json`.
+- release-please (`simple` type) owns versions: never hand-edit `version.txt`, the manifest, `CHANGELOG.md`
+  or lines marked `x-release-please-version`. PR titles must be Conventional Commits (they are squash-merged).
+- Remove `release-as` from `release-please-config.json` after the first (0.1.0) release.
+- No GitHub remote yet; the GitHub owner `KB1RMA` in README refs and `project.name` is assumed.
+
 ## Link facts
 
-- Adapter: FTDI FT232R, shows up as `/dev/cu.usbserial-*` on macOS.
+- The boiler's port is USB: an FTDI FT232R (0403:6001) is inside the controller, connected with a plain USB
+  cable. It shows up as `/dev/cu.usbserial-*` on macOS. There is no external adapter and no RS-232/RS-485 level to work out.
+- ESP32-S3 bridge: boiler cable in the S3's USB (OTG) port, power in COM. The USB-OTG pad must be bridged so
+  that port supplies 5 V; without it the FT232R never enumerates and the log shows "Channel not initialised".
 - Modbus RTU, 19200 baud, 8N1, slave 1. The device is silent until polled (passive listening heard nothing).
 - Function 04 -> exception 1. Unmapped addresses -> exception 2 (e.g. 956-1005, 1406+).
-- Electrical level (RS-232/RS-485/TTL) of the boiler port is still unknown.
 
 ## Known gotchas
 
 - On macOS the FTDI port twice stopped accepting `tcsetattr` (EINVAL; ioctl "Device error") after many
-  open/close cycles. Unplug and replug the adapter. Prefer one open per run.
+  open/close cycles. Unplug and replug the boiler's USB cable. Prefer one open per run.
 - The boiler display lags the registers by roughly 10 s (firing rate, delta T), so compare with timestamps.
 - 32-bit counters store the high word at the even address, the number you want is usually in the odd one.
 - Temperature formula is exact for parameters; live sensors differed from the display by up to ~3 F while
