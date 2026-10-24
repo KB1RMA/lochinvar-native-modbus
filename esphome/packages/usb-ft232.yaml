@@ -1,0 +1,20 @@
+# Transport: an ESP32-S3 acts as USB host for the FTDI FT232R inside the boiler's controller. The
+# boiler's serial port is a USB port, so a plain USB cable connects them, the same way a laptop does.
+# Provides the UART `boiler_uart` that boiler.yaml uses.
+#
+# Plug the cable into the S3's USB (OTG) port and power the board from its COM/UART port. The FT232R
+# only shows up once it gets 5 V on VBUS, and the S3's USB port supplies none by default: on an
+# ESP32-S3-DevKitC-1, bridge the USB-OTG solder pad. Powering the board from COM is not enough on its
+# own. Without 5 V the log shows "usb_uart: Channel not initialised - write ignored" on every request.
+# Flash over the COM/UART port. Needs the esp-idf framework.
+
+usb_host:
+
+usb_uart:
+  - type: FT232
+    channels:
+      - id: boiler_uart
+        baud_rate: 19200
+        data_bits: 8
+        parity: NONE
+        stop_bits: 1

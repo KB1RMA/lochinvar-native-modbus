@@ -1,0 +1,3 @@
+# Tools for checking and building the ESPHome configs: pip install -r requirements.txt
+esphome==2026.10.0
+pyyaml==6.0.3

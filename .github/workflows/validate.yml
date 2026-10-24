@@ -1,0 +1,92 @@
+name: Validate Configs and Register Map
+run-name: Validate Configs and Register Map
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Register map and read-only check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      # The checks only need PyYAML, so skip installing ESPHome here.
+      - run: pip install "$(grep '^pyyaml' requirements.txt)"
+      - run: python tools/check_registers.py
+      # Fails on any write-capable component or key, a register missing from the map, and a
+      # package version that does not match .release-please-manifest.json.
+      - run: python tools/check_esphome.py
+
+  config:
+    name: ESPHome config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - run: pip install -r requirements.txt
+      - run: cp esphome/secrets.example.yaml esphome/secrets.yaml
+      - name: Validate every device config
+        run: |
+          for config in esphome/lochinvar.yaml esphome/tests/*.yaml; do
+            echo "::group::${config}"
+            esphome config "$config" > /dev/null
+            echo "::endgroup::"
+          done
+
+  compile:
+    name: Compile ${{ matrix.config }}
+    needs: config
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - esphome/lochinvar.yaml # ESP32-S3, esp-idf, USB host FT232
+          - esphome/tests/uart-esp32.yaml # ESP32, Arduino, GPIO UART
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      # PlatformIO toolchains and the framework build are most of the compile time.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.platformio
+            esphome/.esphome
+            esphome/tests/.esphome
+          key: esphome-${{ matrix.config }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('esphome/**/*.yaml') }}
+          restore-keys: |
+            esphome-${{ matrix.config }}-${{ hashFiles('requirements.txt') }}-
+
+      - run: pip install -r requirements.txt
+      - run: cp esphome/secrets.example.yaml esphome/secrets.yaml
+      - run: esphome compile "${{ matrix.config }}"

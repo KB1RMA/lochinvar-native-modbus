@@ -1,0 +1,81 @@
+name: PR Title
+run-name: PR Title
+
+# PRs are squash-merged, so the PR title becomes the commit message on main.
+# release-please reads those commit messages to pick the next version and
+# write the changelog, and silently skips any that are not Conventional
+# Commits (https://www.conventionalcommits.org/). This check fails a PR whose
+# title would be skipped.
+#
+# Accepted form:  <type>[(<scope>)][!]: <description>
+#   feat: add a return temperature sensor     -> "Features"
+#   fix(status): decode the lockout code      -> "Bug Fixes"
+#   feat!: rename the boiler_uart id          -> "BREAKING CHANGES"
+#
+# How far each one bumps the version is set in release-please-config.json.
+# Before 1.0.0, bump-minor-pre-major and bump-patch-for-minor-pre-major make
+# a breaking change bump the minor version and a feat bump the patch.
+#
+# The title is checked with a plain shell regex rather than a third-party
+# action, so no outside code runs with access to the PR.
+
+permissions: {}
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-commit:
+    name: Conventional commit title
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check the title
+        # Passed through the environment, never interpolated into the script,
+        # so a crafted title cannot inject shell commands.
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # release-please's default changelog types. feat and fix bump the
+          # version (as does any type with `!`); the rest are hidden or grouped.
+          types='feat|fix|perf|revert|deps|docs|style|chore|refactor|test|build|ci'
+          pattern="^(${types})(\([a-z0-9._/-]+\))?!?: [^[:space:]].*[^.[:space:]]$"
+
+          if [[ "$TITLE" =~ $pattern ]]; then
+            echo "PR title is a valid Conventional Commit: $TITLE"
+            exit 0
+          fi
+
+          echo "::error title=PR title is not a Conventional Commit::\"${TITLE}\" must look like '<type>[(<scope>)][!]: <description>', where <type> is one of: ${types//|/, }. Do not end it with a full stop."
+          {
+            echo "### PR title is not a Conventional Commit"
+            echo
+            echo "release-please reads the squash-merged title to version the package and"
+            echo "write the changelog, and would skip this PR."
+            echo
+            echo '```'
+            echo "$TITLE"
+            echo '```'
+            echo
+            echo "Expected \`<type>[(<scope>)][!]: <description>\`, with no trailing full stop."
+            echo
+            echo "| Type | Before 1.0.0 | From 1.0.0 | Changelog |"
+            echo "| --- | --- | --- | --- |"
+            echo "| \`feat\` | patch | minor | Features |"
+            echo "| \`fix\` | patch | patch | Bug Fixes |"
+            echo "| \`perf\`, \`revert\`, \`deps\` | patch | patch | listed |"
+            echo "| \`docs\`, \`style\`, \`chore\`, \`refactor\`, \`test\`, \`build\`, \`ci\` | none on their own | none on their own | hidden |"
+            echo "| any type with \`!\`, e.g. \`feat!:\` | minor | major | Breaking Changes |"
+            echo
+            echo "Edit the PR title; this check re-runs automatically."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1

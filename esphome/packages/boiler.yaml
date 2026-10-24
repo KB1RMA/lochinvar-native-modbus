@@ -1,0 +1,396 @@
+# Lochinvar boiler, read over the controller's built-in Modbus RTU port (19200 8N1, slave 1).
+#
+# This is the reusable package: the Modbus setup and every entity. It needs a UART with the id
+# `boiler_uart`, which one of the transport packages next to it provides (usb-ft232.yaml or
+# uart.yaml), and a device config that supplies the board, network and Home Assistant link.
+# See ../lochinvar.yaml for a complete device, and README.md for using it from GitHub.
+#
+# READ-ONLY by design: only sensors, binary sensors and text sensors are defined. There are no
+# switch, number, select, output or write_* entries, so the ESP never sends a Modbus write.
+# tools/check_esphome.py enforces this in CI.
+#
+# Source of truth for the registers is ../../registers/controller.yaml. Anything marked "guess" or
+# "unknown" there is not exposed as an entity here unless noted (kept disabled by default).
+
+esphome:
+  project:
+    name: kb1rma.lochinvar-serial-mqtt
+    version: "0.0.0" # x-release-please-version
+
+modbus:
+  id: boiler_modbus
+  uart_id: boiler_uart
+  send_wait_time: 250ms          # the boiler answered within ~100-250 ms in testing
+  turnaround_time: 100ms         # gap after each reply; the default is 600 ms
+
+modbus_controller:
+  - id: boiler
+    modbus_id: boiler_modbus
+    address: 1
+    update_interval: 5s          # live readings and status
+    max_cmd_retries: 3
+    offline_skip_updates: 6      # back off when the boiler stops answering
+
+  # Same boiler, polled less often: settings and lifetime counters.
+  - id: boiler_slow
+    modbus_id: boiler_modbus
+    address: 1
+    update_interval: 5min
+    max_cmd_retries: 3
+
+# ---------------------------------------------------------------------------------------------
+# Temperature decoding (registers/controller.yaml, encoding temp_f):
+#   F = ((raw & 0x7FFF) - 9468) / 25, and raw == 0x8000 means no sensor.
+# ESPHome hands lambdas the parsed value `x` as a float.
+# ---------------------------------------------------------------------------------------------
+
+sensor:
+  # ---- fast group (every 5 s) ----
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Outlet Temperature
+    address: 62
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (x == 32768) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Inlet Temperature
+    address: 73
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (x == 32768) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Exhaust Temperature
+    address: 63
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (x == 32768) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Outdoor Temperature
+    address: 75
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    lambda: |-
+      if (x == 32768) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: flame_signal
+    name: Flame Signal
+    address: 66
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "µA"
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.001
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Fan Speed
+    address: 110
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "rpm"
+    state_class: measurement
+    accuracy_decimals: 0
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Firing Rate
+    address: 80
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.01
+
+  # 100 % from the start of demand until ~60 s after flame-out (post-pump), else 0. The display's
+  # "BLR Pump Out" read 99-100 % while this read 100.00.
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Boiler Pump Output
+    address: 132
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - multiply: 0.01
+
+  # ---- slow group: settings (boiler_slow, every 5 min) ----
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Setpoint
+    address: 1287
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH2 Setpoint
+    address: 1288
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Setpoint
+    address: 1289
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: DHW Setpoint
+    address: 1286
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: High Limit Auto Reset
+    address: 1291
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: High Limit Manual Reset
+    address: 1292
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  # ---- slow group: lifetime counters (boiler_slow; 32-bit, high word at the lower address) ----
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: Power On Hours
+    address: 1302
+    register_type: holding
+    value_type: U_DWORD
+    unit_of_measurement: "h"
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    id: ignition_attempts
+    name: Ignition Attempts
+    address: 1304
+    register_type: holding
+    value_type: U_DWORD
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    id: ignitions
+    name: Ignitions
+    address: 1306
+    register_type: holding
+    value_type: U_DWORD
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH Run Time
+    address: 1308
+    register_type: holding
+    value_type: U_DWORD
+    unit_of_measurement: "h"
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH Cycles
+    address: 1312
+    register_type: holding
+    value_type: U_DWORD
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  # Lifetime attempts minus successes (about 109 already). Alert on it increasing, not on its value.
+  - platform: template
+    name: Failed Ignitions
+    state_class: total_increasing
+    accuracy_decimals: 0
+    update_interval: 60s
+    entity_category: diagnostic
+    lambda: |-
+      if (isnan(id(ignition_attempts).state) || isnan(id(ignitions).state)) return NAN;
+      return id(ignition_attempts).state - id(ignitions).state;
+
+  # ---- status (registers/controller.yaml, status section; see docs/reverse-engineering-log.md session 2) ----
+  # 4 standby (also during anti-cycle / set point met), 6 prepurge, 9 running, 10 post-purge.
+  # Ignition and lockout codes have not been observed yet; Boiler Status shows them as "Unknown (n)".
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: status_code
+    name: Status Code
+    address: 84
+    register_type: holding
+    value_type: U_WORD
+    accuracy_decimals: 0
+    entity_category: diagnostic
+
+  # ---- raw, unidentified status registers (disabled by default; for further reverse engineering) ----
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Raw State r138
+    address: 138
+    register_type: holding
+    value_type: U_WORD
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    disabled_by_default: true
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Raw State r139
+    address: 139
+    register_type: holding
+    value_type: U_WORD
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    disabled_by_default: true
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Raw State r140
+    address: 140
+    register_type: holding
+    value_type: U_WORD
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    disabled_by_default: true
+
+text_sensor:
+  - platform: template
+    name: Boiler Status
+    update_interval: 5s
+    lambda: |-
+      float s = id(status_code).state;
+      if (isnan(s)) return {"Unavailable"};
+      switch ((int) s) {
+        case 4: return {"Standby"};
+        case 6: return {"Prepurge"};
+        case 9: return {"Running"};
+        case 10: return {"Post-purge"};
+        default: return {"Unknown (" + to_string((int) s) + ")"};
+      }
+
+binary_sensor:
+  - platform: status
+    name: Controller Online
+
+  # r118 = 1 while any zone calls for heat. The boiler cannot tell which zone (DHW is piped as a zone).
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Heat Demand
+    address: 118
+    register_type: holding
+    bitmask: 0x0001
+    device_class: heat
+
+  # r140 = 96 when the burner is wanted, 112 when held off (no demand, set point met, clocked).
+  # The difference is bit 4, set = held off, so the bit is inverted.
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    name: Burner Request
+    address: 140
+    register_type: holding
+    bitmask: 0x0010
+    filters:
+      - invert:
+
+  # Flame signal read 0 with the burner off and 2.1 uA within a second of ignition.
+  - platform: template
+    name: Flame Present
+    device_class: heat
+    lambda: |-
+      if (isnan(id(flame_signal).state)) return {};
+      return id(flame_signal).state > 0.5f;
+
+  - platform: template
+    name: Boiler Link OK
+    device_class: connectivity
+    entity_category: diagnostic
+    lambda: |-
+      return id(boiler).get_module_offline() == false;
