@@ -26,7 +26,8 @@ run-name: Release Please
 # GITHUB_TOKEN start no workflows, so the release pull request would never get the status checks the
 # default branch's ruleset requires. The app needs read and write access to contents, issues and
 # pull requests. Its client ID and private key are the RELEASE_APP_CLIENT_ID and
-# RELEASE_APP_PRIVATE_KEY secrets.
+# RELEASE_APP_PRIVATE_KEY secrets of the `release` environment, which only main may deploy to. The
+# environment has no required reviewers, since this job runs on every push to main.
 
 permissions:
   contents: read
@@ -45,6 +46,7 @@ jobs:
     name: Release Please
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: release # holds the app's secrets
     permissions: {} # everything is done with the app's token
     outputs:
       mqtt-released: ${{ steps.release.outputs['mqtt--release_created'] }}
