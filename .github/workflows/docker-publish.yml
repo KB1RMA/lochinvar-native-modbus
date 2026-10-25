@@ -100,7 +100,7 @@ jobs:
       # BuildKit's provenance and SBOM above are unsigned. This adds a signed SLSA provenance
       # attestation for the image index, checked with:
       #   gh attestation verify oci://ghcr.io/kb1rma/lochinvar-native-modbus:X.Y.Z -R KB1RMA/lochinvar-native-modbus
-      - uses: actions/attest-build-provenance@v3
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
