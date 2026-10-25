@@ -8,7 +8,7 @@
 # A static Go binary, cross-compiled on the build machine for each target platform (no emulation),
 # on a distroless base with CA certificates (for MQTT over TLS) and no shell.
 
-FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27 AS build
 ARG TARGETOS TARGETARCH TARGETVARIANT
 WORKDIR /src
 COPY go.mod go.sum ./
