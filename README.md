@@ -77,6 +77,13 @@ default. You can turn them on if you want to help map them.
   Normal is under 1 °F. This can warn you before the boiler locks out.
 - **Graphs:** firing rate against outdoor temperature shows how your outdoor reset curve works.
 
+### Example dashboard
+
+![A live boiler diagram in Home Assistant. It shows supply, return, flue and outdoor temperatures, the pumps, delta T, and today's run time and burns.](docs/images/dashboard.png)
+
+This diagram is part of a full example dashboard. It is laid out like the boiler's own screen, and
+the pipes animate while a pump runs. Copy it from [docs/dashboard](docs/dashboard/README.md).
+
 ## It only reads. It never writes.
 
 A boiler is a gas appliance, so this matters. Modbus has commands that read values and commands that

@@ -1,0 +1,450 @@
+# A Home Assistant dashboard view for the boiler. See README.md in this folder for how to add it.
+# Entity IDs assume the device is named "Lochinvar Boiler" (sensor.lochinvar_boiler_outlet_temperature, ...).
+# The diagram card needs html-template-card from HACS. The daily rows need history-stats.yaml.
+type: sections
+title: Boiler
+path: boiler
+icon: mdi:water-boiler
+max_columns: 3
+sections:
+  - type: grid
+    column_span: 3
+    cards:
+      - type: heading
+        heading: System Diagram
+        icon: mdi:pipe
+      - type: heading
+        heading: >-
+          Laid out like the boiler's own SMART SYSTEM screen. Pipes animate while their pump runs.
+          The zone pump shows as running whenever a zone is calling.
+        heading_style: subtitle
+      - type: custom:html-template-card
+        ignore_line_breaks: true
+        grid_options:
+          columns: full
+        content: |-
+          {%- macro n(e, d=0) -%}{%- set v = states(e) -%}{%- if is_number(v) -%}{{ (v|float|round(d)) if d else (v|float|round(0)|int) }}{%- else -%}—{%- endif -%}{%- endmacro -%}
+          {%- set flame = is_state('binary_sensor.lochinvar_boiler_flame_present', 'on') -%}
+          {%- set demand = is_state('binary_sensor.lochinvar_boiler_heat_demand', 'on') -%}
+          {%- set bpump = states('sensor.lochinvar_boiler_boiler_pump_output')|float(0) > 0 -%}
+          {%- set link = is_state('binary_sensor.lochinvar_boiler_boiler_link_ok', 'on') -%}
+          {%- set rt = states('sensor.boiler_run_time_today')|float(0) -%}
+          {%- set bl = '' if bpump else ' idle' -%}
+          {%- set sl = '' if demand else ' idle' -%}
+          <svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:860px;display:block;margin:0 auto" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace">
+          <style>
+          .ln{fill:none;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+          .hot{stroke:#e4572e}.cold{stroke:#3a86ff}.idle{opacity:.35}
+          .flow{fill:none;stroke:#fff;stroke-opacity:.8;stroke-width:2;stroke-linecap:round;stroke-dasharray:3 15;animation:f 1s linear infinite}
+          @keyframes f{to{stroke-dashoffset:-18}}
+          .house{fill:none;stroke:var(--primary-color);stroke-width:4;stroke-linejoin:round;stroke-linecap:round}
+          .box{fill:var(--card-background-color,#fff);stroke:var(--primary-text-color);stroke-width:3}
+          .t{fill:var(--primary-text-color)}.s{fill:var(--secondary-text-color)}
+          .big{font-size:26px;font-weight:700}.mid{font-size:20px;font-weight:700}
+          .lbl{font-size:11px;letter-spacing:.1em}.row{font-size:12px}.val{font-size:14px;font-weight:700}
+          .pump{fill:var(--card-background-color,#fff);stroke:var(--primary-text-color);stroke-width:3}
+          .on{fill:var(--primary-text-color)}.off{fill:none;stroke:var(--secondary-text-color);stroke-width:2}
+          .fl{transform-box:fill-box;transform-origin:50% 100%;animation:fl .5s ease-in-out infinite alternate}
+          @keyframes fl{from{transform:scale(1,1)}to{transform:scale(.88,1.1)}}
+          .smoke{fill:none;stroke:var(--secondary-text-color);stroke-width:2;stroke-linecap:round;stroke-dasharray:4 6;animation:sm 1.4s linear infinite}
+          @keyframes sm{to{stroke-dashoffset:-20}}
+          .warn{fill:var(--error-color,#db4437)}
+          </style>
+          <path class="house" d="M18 140 L380 28 L742 140"/>
+          <path class="house" d="M40 133 V385 H720 V133"/>
+          <text x="740" y="44" text-anchor="end" class="s lbl">OUTDOOR</text>
+          <text x="740" y="72" text-anchor="end" class="t big">{{ n('sensor.lochinvar_boiler_outdoor_temperature') }}°F</text>
+          <rect x="92" y="44" width="28" height="136" rx="3" class="box" style="stroke-width:2.5"/>
+          {%- if flame %}
+          <path class="smoke" d="M100 38 q-6 -8 0 -16 q6 -8 0 -16 M112 38 q-6 -8 0 -16 q6 -8 0 -16"/>
+          {%- endif %}
+          <text x="130" y="140" class="s lbl">FLUE</text>
+          <text x="130" y="164" class="t mid">{{ n('sensor.lochinvar_boiler_exhaust_temperature') }}°F</text>
+          <path class="ln hot{{ bl }}" d="M200 245 H330 V200"/>
+          <path class="ln cold{{ bl }}" d="M370 200 V352 H200"/>
+          <path class="ln cold{{ sl }}" d="M470 200 H330"/>
+          <path class="ln hot{{ sl }}" d="M330 200 H290 V150 H470"/>
+          <path class="ln hot{{ sl }}" d="M458 140 L470 150 L458 160"/>
+          <path class="ln cold{{ sl }}" d="M482 190 L470 200 L482 210"/>
+          {%- if bpump %}
+          <path class="flow" d="M200 245 H330 V200"/>
+          <path class="flow" d="M370 200 V352 H200"/>
+          {%- endif %}
+          {%- if demand %}
+          <path class="flow" d="M470 200 H290 V150 H470"/>
+          {%- endif %}
+          <circle cx="290" cy="175" r="15" class="pump"/>
+          <path d="M282 181 L290 167 L298 181 Z" class="{{ 'on' if demand else 'off' }}"/>
+          <text x="268" y="171" text-anchor="end" class="s lbl">ZONES</text>
+          <text x="268" y="188" text-anchor="end" class="t val">{{ 'CALLING' if demand else 'IDLE' }}</text>
+          <circle cx="370" cy="285" r="15" class="pump"/>
+          <path d="M362 279 L370 293 L378 279 Z" class="{{ 'on' if bpump else 'off' }}"/>
+          <text x="394" y="281" class="s lbl">BOILER PUMP</text>
+          <text x="394" y="299" class="t val">{{ n('sensor.lochinvar_boiler_boiler_pump_output') }}%</text>
+          {%- set dt = states('sensor.lochinvar_boiler_delta_t')|float(none) -%}
+          {%- set band = '' if dt is none else ('LOW' if dt < 5 else ('LIGHT' if dt < 15 else ('NORMAL' if dt < 30 else 'HEAVY'))) -%}
+          <path d="M216 253 H226 V344 H216" fill="none" stroke="var(--secondary-text-color)" stroke-width="2"/>
+          <line x1="226" y1="298" x2="236" y2="298" stroke="var(--secondary-text-color)" stroke-width="2"/>
+          <text x="242" y="282" class="s lbl">ΔT</text>
+          <text x="242" y="308" class="t big">{{ n('sensor.lochinvar_boiler_delta_t', 1) }}°F</text>
+          <text x="242" y="326" class="s lbl">{{ band }}{{ ' LOAD' if band in ['LIGHT', 'HEAVY'] else '' }}</text>
+          <rect x="60" y="180" width="140" height="190" rx="10" class="box"/>
+          <line x1="60" y1="208" x2="200" y2="208" stroke="var(--primary-text-color)" stroke-width="2"/>
+          {%- if link %}
+          <text x="130" y="199" text-anchor="middle" class="t row" font-weight="700">{{ states('sensor.lochinvar_boiler_boiler_status')|upper|truncate(16, true, '…') }}</text>
+          {%- else %}
+          <text x="130" y="199" text-anchor="middle" class="warn row" font-weight="700">LINK DOWN</text>
+          {%- endif %}
+          <text x="130" y="227" text-anchor="middle" class="s lbl">SUPPLY</text>
+          <text x="130" y="253" text-anchor="middle" class="t big">{{ n('sensor.lochinvar_boiler_outlet_temperature') }}°F</text>
+          {%- if flame %}
+          <g class="fl"><path d="M88 304 c-14 0 -18 -12 -12 -22 c3 6 6 7 8 6 c-3 -10 2 -20 10 -26 c-1 9 4 13 8 18 c4 5 4 16 -4 20 c-2 2 -6 4 -10 4 Z" fill="#ff8c1a"/>
+          <path d="M89 304 c-6 0 -8 -6 -5 -10 c2 3 3 3 4 2 c-1 -5 2 -8 5 -10 c0 4 2 6 3 9 c1 5 -2 9 -7 9 Z" fill="#ffd166"/></g>
+          {%- else %}
+          <path d="M88 304 c-14 0 -18 -12 -12 -22 c3 6 6 7 8 6 c-3 -10 2 -20 10 -26 c-1 9 4 13 8 18 c4 5 4 16 -4 20 c-2 2 -6 4 -10 4 Z" class="off"/>
+          {%- endif %}
+          <text x="152" y="300" text-anchor="middle" class="t big">{{ n('sensor.lochinvar_boiler_firing_rate') if flame else 0 }}%</text>
+          <text x="130" y="336" text-anchor="middle" class="s lbl">RETURN</text>
+          <text x="130" y="362" text-anchor="middle" class="t big">{{ n('sensor.lochinvar_boiler_inlet_temperature') }}°F</text>
+          <rect x="522" y="150" width="196" height="222" rx="8" fill="none" stroke="var(--divider-color)" stroke-width="2"/>
+          {%- set rows = [
+            ('Target', n('sensor.lochinvar_boiler_target_temperature') ~ '°F'),
+            ('SH1 setpt', n('sensor.lochinvar_boiler_sh1_setpoint') ~ '°F'),
+            ('Flame signal', n('sensor.lochinvar_boiler_flame_signal', 1) ~ ' µA'),
+            ('Fan', n('sensor.lochinvar_boiler_fan_speed') ~ ' rpm'),
+            ('Run today', rt|int ~ 'h ' ~ ((rt - rt|int) * 60)|round|int ~ 'm'),
+            ('Cycles today', n('sensor.boiler_cycles_today')),
+            ('Duty today', n('sensor.boiler_duty_cycle_today', 1) ~ '%'),
+            ('Failed ign.', n('sensor.lochinvar_boiler_failed_ignitions')),
+          ] %}
+          {%- for label, value in rows %}
+          <text x="534" y="{{ 178 + loop.index0 * 26 }}" class="s row">{{ label }}</text>
+          <text x="706" y="{{ 178 + loop.index0 * 26 }}" text-anchor="end" class="t val">{{ value }}</text>
+          {%- endfor %}
+          </svg>
+
+  - type: grid
+    column_span: 3
+    cards:
+      - type: heading
+        heading: Boiler
+        icon: mdi:water-boiler
+      - type: heading
+        heading: Read-only, from the boiler's USB port. The boiler's own display lags these by about 10 s.
+        heading_style: subtitle
+      - type: tile
+        entity: sensor.lochinvar_boiler_boiler_status
+        name: Status
+        icon: mdi:state-machine
+        grid_options:
+          columns: 12
+      - type: tile
+        entity: binary_sensor.lochinvar_boiler_heat_demand
+        name: Heat Demand
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: binary_sensor.lochinvar_boiler_burner_request
+        name: Burner Request
+        icon: mdi:fire-alert
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: binary_sensor.lochinvar_boiler_flame_present
+        name: Flame
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: binary_sensor.lochinvar_boiler_anti_cycle
+        name: Anti-Cycle
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_firing_rate
+        name: Firing Rate
+        icon: mdi:fire
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_boiler_pump_output
+        name: Boiler Pump
+        icon: mdi:pump
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_fan_speed
+        name: Fan Speed
+        icon: mdi:fan
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_flame_signal
+        name: Flame Signal
+        icon: mdi:sine-wave
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: binary_sensor.lochinvar_boiler_boiler_link_ok
+        name: Boiler Link
+        icon: mdi:usb
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: binary_sensor.lochinvar_boiler_controller_online
+        name: Controller Online
+        icon: mdi:chip
+        grid_options:
+          columns: 6
+
+  - type: grid
+    column_span: 3
+    cards:
+      - type: heading
+        heading: Water Temperatures
+        icon: mdi:thermometer-water
+      - type: tile
+        entity: sensor.lochinvar_boiler_outlet_temperature
+        name: Outlet
+        icon: mdi:thermometer-chevron-up
+        color: red
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_inlet_temperature
+        name: Inlet
+        icon: mdi:thermometer-chevron-down
+        color: blue
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_outdoor_temperature
+        name: Outdoor
+        icon: mdi:home-thermometer-outline
+        color: green
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_delta_t
+        name: Delta T
+        icon: mdi:thermometer-lines
+        color: deep-orange
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_exhaust_temperature
+        name: Exhaust
+        icon: mdi:smoke
+        color: grey
+        grid_options:
+          columns: 6
+      - type: history-graph
+        hours_to_show: 24
+        grid_options:
+          columns: full
+        entities:
+          - entity: sensor.lochinvar_boiler_outlet_temperature
+            name: Outlet
+            color: "#d73027"
+          - entity: sensor.lochinvar_boiler_inlet_temperature
+            name: Inlet
+            color: "#2166ac"
+          - entity: sensor.lochinvar_boiler_outdoor_temperature
+            name: Outdoor
+            color: "#1a9850"
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: heading
+        heading: State Timeline, 12 h
+        icon: mdi:timeline-clock-outline
+      - type: history-graph
+        hours_to_show: 12
+        entities:
+          - entity: sensor.lochinvar_boiler_boiler_status
+            name: Status
+          - entity: binary_sensor.lochinvar_boiler_heat_demand
+            name: Demand
+          - entity: binary_sensor.lochinvar_boiler_burner_request
+            name: Burner request
+          - entity: binary_sensor.lochinvar_boiler_flame_present
+            name: Flame
+          - entity: binary_sensor.lochinvar_boiler_anti_cycle
+            name: Anti-cycle
+          - entity: binary_sensor.lochinvar_boiler_boiler_link_ok
+            name: Link
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: heading
+        heading: Firing and Flue, 24 h
+        icon: mdi:fire
+      - type: history-graph
+        hours_to_show: 24
+        entities:
+          - entity: sensor.lochinvar_boiler_firing_rate
+            name: Firing rate
+          - entity: sensor.lochinvar_boiler_boiler_pump_output
+            name: Boiler pump
+      - type: history-graph
+        hours_to_show: 24
+        entities:
+          - entity: sensor.lochinvar_boiler_flame_signal
+            name: Flame signal
+      - type: history-graph
+        hours_to_show: 24
+        entities:
+          - entity: sensor.lochinvar_boiler_exhaust_temperature
+            name: Exhaust
+            color: "#8e8e8e"
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: heading
+        heading: Firing Today
+        icon: mdi:fire
+      - type: gauge
+        entity: sensor.boiler_duty_cycle_today
+        name: Duty Cycle Today
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 0
+          yellow: 40
+          red: 65
+      - type: tile
+        entity: sensor.boiler_run_time_today
+        name: Run Time Today
+        icon: mdi:clock-outline
+      - type: tile
+        entity: sensor.boiler_cycles_today
+        name: Firing Cycles Today
+        icon: mdi:counter
+      - type: tile
+        entity: sensor.boiler_run_time_this_month
+        name: Run Time This Month
+        icon: mdi:calendar-clock
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: heading
+        heading: Setpoints
+        icon: mdi:thermostat
+      - type: tile
+        entity: sensor.lochinvar_boiler_sh1_setpoint
+        name: SH1
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_sh2_setpoint
+        name: SH2
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_sh3_setpoint
+        name: SH3
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_dhw_setpoint
+        name: DHW
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_high_limit_auto_reset
+        name: High Limit (auto)
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_high_limit_manual_reset
+        name: High Limit (manual)
+        grid_options:
+          columns: 6
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: heading
+        heading: Lifetime Counters
+        icon: mdi:counter
+      - type: tile
+        entity: sensor.lochinvar_boiler_power_on_hours
+        name: Power-On Hours
+        icon: mdi:timer-outline
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_sh_run_time
+        name: SH Run Time
+        icon: mdi:clock-outline
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_ignitions
+        name: Ignitions
+        icon: mdi:fire-circle
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_failed_ignitions
+        name: Failed Ignitions
+        icon: mdi:fire-off
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_sh_cycles
+        name: SH Cycles
+        icon: mdi:sync
+        grid_options:
+          columns: 6
+      - type: tile
+        entity: sensor.lochinvar_boiler_ignition_attempts
+        name: Ignition Attempts
+        icon: mdi:flash-outline
+        grid_options:
+          columns: 6
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: heading
+        heading: Reading the Status
+        icon: mdi:information-outline
+      - type: markdown
+        content: |-
+          | Status | What it means |
+          |:--|:--|
+          | **Standby** | No call for heat |
+          | **Demand** | A zone is calling; burner about to start |
+          | **Demand, held off** | Calling, but the controller is holding the burner off (display: *clocked* or *set point met*) |
+          | **Prepurge** | Blower purging before ignition (~18 s) |
+          | **Ignition** | Lighting the burner (5-10 s) |
+          | **Running** | Burner lit |
+          | **Post-purge** | Blower clearing after flame-out (~11 s) |
+          | **Anti-cycle** | Off-delay after a burn before the next start |
+          | **Pump delay** | Demand ended; boiler pump running out its ~60 s post-pump |
+          | **Unknown (n)** | Code not decoded yet; note what the display shows |
+
+          A demand with no flame for up to ~11 min is normal.
+
+          **Failed Ignitions** is lifetime attempts minus successes. Watch for it going *up*, not its value.
+
+          If **Link** stays off, unplugging and replugging the boiler's USB cable has cleared it before.
+
+  - type: grid
+    column_span: 1
+    cards:
+      - type: statistics-graph
+        title: Daily Run Time (hours)
+        entities:
+          - entity: sensor.boiler_run_time_today
+            name: Hours Running
+        period: day
+        stat_types:
+          - max
+        chart_type: bar
+        days_to_show: 30
