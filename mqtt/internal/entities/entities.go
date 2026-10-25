@@ -216,13 +216,13 @@ func ByKey(key string) (Entity, bool) {
 	return e, ok
 }
 
-// InGroup returns the entities of one group, in order.
-func InGroup(g Group) []Entity {
-	var out []Entity
+var byGroup = func() map[Group][]Entity {
+	m := map[Group][]Entity{}
 	for _, e := range All {
-		if e.Group == g {
-			out = append(out, e)
-		}
+		m[e.Group] = append(m[e.Group], e)
 	}
-	return out
-}
+	return m
+}()
+
+// InGroup returns the entities of one group, in order. The slice is shared; don't modify it.
+func InGroup(g Group) []Entity { return byGroup[g] }

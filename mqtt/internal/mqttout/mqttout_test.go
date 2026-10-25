@@ -124,3 +124,24 @@ func TestBadCAFile(t *testing.T) {
 		}
 	}
 }
+
+func TestRetainedBirthDoesNotRepublishTwice(t *testing.T) {
+	t.Parallel()
+	server, port := startBroker(t)
+	topics := discovery.DefaultTopics()
+	if err := server.Publish(topics.HAStatus(), []byte(discovery.Online), true, 0); err != nil {
+		t.Fatal(err)
+	}
+	c, err := mqttout.New(mqttout.Settings{Host: "127.0.0.1", Port: port, ClientID: "test-bridge"}, topics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Connect()
+	t.Cleanup(func() { c.Close(100 * time.Millisecond) })
+	waitSignal(t, c.Republish(), "connecting")
+	select {
+	case <-c.Republish():
+		t.Error("the retained Home Assistant birth message signalled a second republish")
+	case <-time.After(500 * time.Millisecond):
+	}
+}

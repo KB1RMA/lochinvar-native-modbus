@@ -16,6 +16,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"math"
 	"os"
 	"slices"
 	"strconv"
@@ -279,6 +280,9 @@ func readConfigFile(path string) (map[string]string, error) {
 func parseDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(s)
 	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		if math.IsNaN(f) || math.Abs(f) > float64(math.MaxInt64/int64(time.Second)) {
+			return 0, fmt.Errorf("duration %q out of range", s)
+		}
 		return time.Duration(f * float64(time.Second)), nil
 	}
 	d, err := time.ParseDuration(s)

@@ -270,7 +270,44 @@ func TestPortErrorRetriesEveryTenSeconds(t *testing.T) {
 	f.boiler.SetFail(false)
 	f.bridge.Step(at(25))
 	expect(t, "link", f.out.last["lochinvar/link"], "online")
+	expect(t, "reconnects", f.out.state("link_reconnects"), "0") // only silent-link reopens count
+}
+
+func TestNoReopenRightAfterUnplug(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.bridge.Step(at(0))
+	f.boiler.SetFail(true) // cable unplugged for 10 min
+	for s := 5.0; s < 600; s += 10 {
+		f.bridge.Step(at(s))
+	}
+	f.boiler.SetFail(false)
+	f.boiler.SetSilent(true) // replugged, but the boiler doesn't answer yet
+	f.bridge.Step(at(605))
+	opened := f.boiler.Opened()
+	for s := 635.0; s < 605+180; s += 30 {
+		f.bridge.Step(at(s))
+	}
+	if n := f.boiler.Opened(); n != opened {
+		t.Fatalf("port reopened %d times within 3 min of opening it", n-opened)
+	}
+	expect(t, "reconnects", f.out.state("link_reconnects"), "0")
+	f.bridge.Step(at(605 + 180)) // silent 3 min since the open: now it reopens
 	expect(t, "reconnects", f.out.state("link_reconnects"), "1")
+}
+
+func TestFailedIgnitionsRetriedSoonAfterAStartDuringIgnition(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.boiler.Set(84, 6) // prepurge
+	f.bridge.Step(at(0))
+	expect(t, "counters still published", f.out.state("ignitions"), "5000")
+	expect(t, "failed held", f.out.state("failed_ignitions"), "")
+	f.boiler.Set(84, 9)
+	for s := 5.0; s <= 30; s += 5 {
+		f.bridge.Step(at(s))
+	}
+	expect(t, "failed 30 s later", f.out.state("failed_ignitions"), "109")
 }
 
 func TestFailedIgnitionsSkipsReadsDuringIgnition(t *testing.T) {

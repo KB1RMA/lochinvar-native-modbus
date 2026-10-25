@@ -76,6 +76,9 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
+// offlineWait is the poll interval while the link is down or answering with exceptions.
+func (o Options) offlineWait() time.Duration { return o.FastInterval * time.Duration(o.OfflineSkip) }
+
 type linkState uint8
 
 const (
@@ -98,7 +101,6 @@ type Bridge struct {
 	linkSeenOK    bool
 	linkDownSince time.Time
 	reopenWait    time.Duration
-	openedOnce    bool
 	reconnects    int
 	status        decode.Value // latest Status Code; None while the link is down
 	guard         decode.IgnitionGuard
@@ -242,6 +244,8 @@ func (b *Bridge) maybeReopen(now time.Time) {
 	}
 	slog.Warn("boiler silent; reopening the serial port", "down", now.Sub(b.linkDownSince))
 	b.link.Close()
+	b.reconnects++
+	b.set(entities.LinkReconnects, decode.Num(float64(b.reconnects)))
 	b.linkDownSince = now
 	b.reopenWait = min(2*b.reopenWait, b.opt.ReopenMax)
 	b.nextPort = now.Add(2 * time.Second)
@@ -287,7 +291,7 @@ func (b *Bridge) pollFast(now time.Time) (bool, error) {
 	case readOK:
 	case readNoReply:
 		b.linkDown(now)
-		b.nextFast = now.Add(b.opt.FastInterval * time.Duration(b.opt.OfflineSkip)) // back off like the ESP
+		b.nextFast = now.Add(b.opt.offlineWait()) // back off like the ESP
 		b.maybeReopen(now)
 		return false, nil
 	case readException:
@@ -296,7 +300,7 @@ func (b *Bridge) pollFast(now time.Time) (bool, error) {
 		b.linkUp()
 		b.clearFast("Unavailable")
 		b.status = decode.None
-		b.nextFast = now.Add(b.opt.FastInterval * time.Duration(b.opt.OfflineSkip))
+		b.nextFast = now.Add(b.opt.offlineWait())
 		return false, nil
 	}
 	b.linkUp()
@@ -326,7 +330,7 @@ func (b *Bridge) pollSlow(now time.Time) error {
 		return err
 	}
 	if res != readOK {
-		b.nextSlow = now.Add(b.opt.FastInterval * time.Duration(b.opt.OfflineSkip))
+		b.nextSlow = now.Add(b.opt.offlineWait())
 		return nil
 	}
 	b.nextSlow = now.Add(b.opt.SlowInterval)
@@ -345,7 +349,9 @@ func (b *Bridge) pollSlow(now time.Time) error {
 	if b.guard.CountersClean(b.status, now) {
 		b.set(entities.FailedIgnitions, decode.FailedIgnitions(v[entities.IgnitionAttempts], v[entities.Ignitions]))
 	} else {
+		// Read again once the ignition has settled rather than a whole slow interval later.
 		slog.Info("counters read during an ignition; Failed Ignitions held")
+		b.nextSlow = now.Add(min(b.opt.SlowInterval, decode.IgnitionSettle))
 	}
 	return nil
 }
@@ -361,11 +367,10 @@ func (b *Bridge) Step(now time.Time) time.Duration {
 			return b.opt.PortRetry
 		}
 		slog.Info("opened serial port", "path", b.link.Path())
-		if b.openedOnce {
-			b.reconnects++
-			b.set(entities.LinkReconnects, decode.Num(float64(b.reconnects)))
+		// Time the silence from now: the port was unusable until this open, so a reopen now would not help.
+		if !b.linkDownSince.IsZero() {
+			b.linkDownSince = now
 		}
-		b.openedOnce = true
 		b.nextFast = now
 	}
 	if !now.Before(b.nextFast) {

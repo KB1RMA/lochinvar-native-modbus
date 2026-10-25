@@ -66,8 +66,9 @@ func New(s Settings, topics discovery.Topics) (*Client, error) {
 		SetOnConnectHandler(func(cl paho.Client) {
 			attempts.Store(0)
 			slog.Info("connected to MQTT", "host", s.Host, "port", s.Port)
+			// A retained birth message arrives right after subscribing; this connect already republishes.
 			cl.Subscribe(topics.HAStatus(), 0, func(_ paho.Client, m paho.Message) {
-				if string(m.Payload()) == discovery.Online {
+				if !m.Retained() && string(m.Payload()) == discovery.Online {
 					c.signal()
 				}
 			})
