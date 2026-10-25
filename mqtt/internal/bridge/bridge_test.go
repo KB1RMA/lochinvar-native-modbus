@@ -74,6 +74,10 @@ func TestFirstPollPublishesEverything(t *testing.T) {
 	expect(t, "outlet", o.state("outlet_temp"), "150.0")
 	expect(t, "inlet", o.state("inlet_temp"), "130.0")
 	expect(t, "delta T", o.state("delta_t"), "20.0")
+	expect(t, "outlet sensor diff", o.state("outlet_sensor_diff"), "0.6")
+	expect(t, "flue sensor diff", o.state("flue_sensor_diff"), "0.7")
+	expect(t, "target", o.state("target_temp"), "172.1")
+	expect(t, "SH1 reset target", o.state("sh1_reset_target"), "172.1")
 	expect(t, "flame", o.state("flame_signal"), "2.1")
 	expect(t, "firing rate", o.state("firing_rate"), "40.0")
 	expect(t, "pump", o.state("boiler_pump_output"), "100")
@@ -86,6 +90,7 @@ func TestFirstPollPublishesEverything(t *testing.T) {
 	expect(t, "SH1", o.state("setpoint_sh1"), "180")
 	expect(t, "attempts", o.state("ignition_attempts"), "5109")
 	expect(t, "SH run time", o.state("sh_run_time"), "3828")
+	expect(t, "SH run time low fire", o.state("sh_run_time_low_fire"), "2055")
 	expect(t, "failed", o.state("failed_ignitions"), "109")
 	expect(t, "reconnects", o.state("link_reconnects"), "0")
 	for _, m := range o.messages {
@@ -108,6 +113,7 @@ func TestPublishesOnlyChanges(t *testing.T) {
 	f.bridge.Step(at(10))
 	want := []message{
 		{"lochinvar/sensor/outlet_temp/state", "151.0", true},
+		{"lochinvar/sensor/outlet_sensor_diff/state", "0.4", true},
 		{"lochinvar/sensor/delta_t/state", "21.0", true},
 	}
 	if got := f.out.messages[n:]; !slices.Equal(got, want) {
@@ -123,6 +129,31 @@ func slowReads(b *modbustest.Boiler) int {
 		}
 	}
 	return n
+}
+
+func TestNoDemandClearsTargets(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.boiler.Set(84, 4)
+	f.boiler.Set(118, 0)
+	f.boiler.Set(146, 43036) // 32.0 °F: no active set point
+	f.bridge.Step(at(0))
+	expect(t, "target", f.out.state("target_temp"), "None")
+	expect(t, "SH1 reset target", f.out.state("sh1_reset_target"), "None")
+	f.boiler.Set(118, 1)
+	f.boiler.Set(146, f.boiler.Get(142))
+	f.bridge.Step(at(5))
+	expect(t, "target", f.out.state("target_temp"), "172.1")
+	expect(t, "SH1 reset target", f.out.state("sh1_reset_target"), "172.1")
+}
+
+func TestSensorDiffNeedsBothSensors(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.boiler.Set(65, 0x8000)
+	f.bridge.Step(at(0))
+	expect(t, "outlet sensor diff", f.out.state("outlet_sensor_diff"), "0.6")
+	expect(t, "flue sensor diff", f.out.state("flue_sensor_diff"), "None")
 }
 
 func TestSlowGroupEveryFiveMinutes(t *testing.T) {
@@ -154,6 +185,9 @@ func TestLinkLossClearsReadings(t *testing.T) {
 	expect(t, "status", o.status(), "Link lost")
 	expect(t, "outlet", o.state("outlet_temp"), "None")
 	expect(t, "delta T", o.state("delta_t"), "None")
+	expect(t, "outlet sensor diff", o.state("outlet_sensor_diff"), "None")
+	expect(t, "target", o.state("target_temp"), "None")
+	expect(t, "SH1 reset target", o.state("sh1_reset_target"), "None")
 	expect(t, "heat demand", o.binary("heat_demand"), "None")
 	expect(t, "flame present", o.binary("flame_present"), "None")
 	expect(t, "SH1 keeps its value", o.state("setpoint_sh1"), "180")

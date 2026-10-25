@@ -34,6 +34,10 @@ const (
 const (
 	OutletTemp       = "outlet_temp"
 	InletTemp        = "inlet_temp"
+	ExhaustTemp      = "exhaust_temp"
+	OutletSensorDiff = "outlet_sensor_diff"
+	FlueSensorDiff   = "flue_sensor_diff"
+	SH1ResetTarget   = "sh1_reset_target"
 	FlameSignal      = "flame_signal"
 	BoilerPumpOutput = "boiler_pump_output"
 	StatusCode       = "status_code"
@@ -118,8 +122,31 @@ var All = []Entity{
 	// ---- fast group ----
 	liveTemp(OutletTemp, "Outlet Temperature", 62),
 	liveTemp(InletTemp, "Inlet Temperature", 73),
-	liveTemp("exhaust_temp", "Exhaust Temperature", 63),
+	liveTemp(ExhaustTemp, "Exhaust Temperature", 63),
 	liveTemp("outdoor_temp", "Outdoor Temperature", 75),
+	// The second thermistor of each dual sensor (S1b, S3b). Decode gives its temperature; the bridge
+	// publishes the difference from the first one (r62, r63) in the same poll.
+	{
+		Key: OutletSensorDiff, Name: "Outlet Sensor Difference", Component: Sensor, Group: Fast, Address: 64, Words: 1,
+		Decode: decode.TempF, Unit: degF, DeviceClass: "temperature_delta", StateClass: measurement, Precision: prec(1),
+		EntityCategory: diagnostic, Icon: "mdi:thermometer-alert",
+	},
+	{
+		Key: FlueSensorDiff, Name: "Flue Sensor Difference", Component: Sensor, Group: Fast, Address: 65, Words: 1,
+		Decode: decode.TempF, Unit: degF, DeviceClass: "temperature_delta", StateClass: measurement, Precision: prec(1),
+		EntityCategory: diagnostic, Icon: "mdi:thermometer-alert",
+	},
+	{
+		Key: "target_temp", Name: "Target Temperature", Component: Sensor, Group: Fast, Address: 146, Words: 1,
+		Decode: decode.TargetF, Unit: degF, DeviceClass: temperature, StateClass: measurement, Precision: prec(1),
+		Icon: "mdi:thermometer-check",
+	},
+	// Published only while Heat Demand is on: the control stops updating it with no call.
+	{
+		Key: SH1ResetTarget, Name: "SH1 Reset Target", Component: Sensor, Group: Fast, Address: 142, Words: 1,
+		Decode: decode.TempF, Unit: degF, DeviceClass: temperature, StateClass: measurement, Precision: prec(1),
+		EntityCategory: diagnostic,
+	},
 	{
 		Key: FlameSignal, Name: "Flame Signal", Component: Sensor, Group: Fast, Address: 66, Words: 1,
 		Decode: decode.Scaled(0.001), Unit: "µA", StateClass: measurement, Precision: prec(1),
@@ -177,6 +204,11 @@ var All = []Entity{
 	counter(IgnitionAttempts, "Ignition Attempts", 1304, ""),
 	counter(Ignitions, "Ignitions", 1306, ""),
 	counter("sh_run_time", "SH Run Time", 1308, "h"),
+	func() Entity { // map confidence "guess" (WinPro "SH hours <50 %")
+		e := counter("sh_run_time_low_fire", "SH Run Time Low Fire", 1310, "h")
+		e.DisabledByDefault = true
+		return e
+	}(),
 	counter("sh_cycles", "SH Cycles", 1312, ""),
 	// Lifetime attempts minus successes. Held while the counters were read during an ignition.
 	{

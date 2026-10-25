@@ -33,6 +33,24 @@ func TestTempF(t *testing.T) {
 	none(t, "0 (bogus first read after a reboot)", decode.TempF(0))
 }
 
+func TestTargetF(t *testing.T) {
+	t.Parallel()
+	near(t, "172 flagged", decode.TargetF(0x8000|(172*25+9468)), 172)
+	none(t, "43036 (32.0 °F, no set point)", decode.TargetF(43036))
+	none(t, "0x8000", decode.TargetF(0x8000))
+	none(t, "0", decode.TargetF(0))
+}
+
+func TestSensorDiffAndWhile(t *testing.T) {
+	t.Parallel()
+	near(t, "diff", decode.SensorDiff(decode.Num(150), decode.Num(150.6)), 0.6)
+	near(t, "diff reversed", decode.SensorDiff(decode.Num(150.6), decode.Num(150)), 0.6)
+	none(t, "diff without second sensor", decode.SensorDiff(decode.Num(150), decode.None))
+	near(t, "while on", decode.While(decode.Bool(true), decode.Num(172.1)), 172.1)
+	none(t, "while off", decode.While(decode.Bool(false), decode.Num(172.1)))
+	none(t, "while unknown", decode.While(decode.None, decode.Num(172.1)))
+}
+
 func TestSetpointOnlyDropsZero(t *testing.T) {
 	t.Parallel()
 	raw := uint16(180*25 + 9468)

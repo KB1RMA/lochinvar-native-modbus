@@ -312,6 +312,9 @@ func (b *Bridge) pollFast(now time.Time) (bool, error) {
 	}
 	b.status = v[entities.StatusCode]
 	b.guard.NoteStatus(b.status, now)
+	v[entities.OutletSensorDiff] = decode.SensorDiff(v[entities.OutletTemp], v[entities.OutletSensorDiff])
+	v[entities.FlueSensorDiff] = decode.SensorDiff(v[entities.ExhaustTemp], v[entities.FlueSensorDiff])
+	v[entities.SH1ResetTarget] = decode.While(v[entities.HeatDemand], v[entities.SH1ResetTarget])
 	v[entities.DeltaT] = decode.DeltaT(v[entities.OutletTemp], v[entities.InletTemp])
 	v[entities.FlamePresent] = decode.FlamePresent(v[entities.FlameSignal])
 	for _, g := range []entities.Group{entities.Fast, entities.Derived} {

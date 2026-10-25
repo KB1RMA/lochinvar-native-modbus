@@ -74,10 +74,10 @@ encodings:
 
 live:
   - {name: outlet_temp,    address: 62,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [154]}
-  - {name: outlet_temp_2,  address: 64,   encoding: temp_f, confidence: likely, note: "second outlet thermistor; within 0.7 F of r62. The service manual calls the pair S1a/S1b (two thermistors in one housing, the outlet / high limit sensor) and WinPro shows Outlet 1 and Outlet 2; the Outlet Temp Diff fault trips when they disagree"}
+  - {name: outlet_temp_2,  address: 64,   encoding: temp_f, confidence: likely, note: "second outlet thermistor; within 0.7 F of r62. The service manual calls the pair S1a/S1b (two thermistors in one housing, the outlet / high limit sensor) and WinPro shows Outlet 1 and Outlet 2; the Outlet Temp Diff fault trips when they disagree. Published as Outlet Sensor Difference, |r62 - r64|"}
   - {name: inlet_temp,     address: 73,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [155], note: "outlet - inlet matched display delta T allowing for lag; HA return pipe probe tracks it (sd about 1 F, reads 7 F low)"}
   - {name: exhaust_temp,   address: 63,   encoding: temp_f, confidence: likely, accuracy_f: 3, note: "falls fast as firing rate drops; reads 15-25 F below inlet at low fire, recheck against display"}
-  - {name: exhaust_temp_2, address: 65,   encoding: temp_f, confidence: likely, note: "second flue thermistor; within 0.9 F of r63. Service manual S3a/S3b; WinPro shows Flue 2 as check / limit"}
+  - {name: exhaust_temp_2, address: 65,   encoding: temp_f, confidence: likely, note: "second flue thermistor; within 0.9 F of r63. Service manual S3a/S3b; WinPro shows Flue 2 as check / limit. Published as Flue Sensor Difference, |r63 - r65| (fault 'Flue sens diff')"}
   - {name: exhaust_temp_max, address: 156, encoding: temp_f, confidence: guess, note: "equals max(r63, r65) in 92 percent of samples"}
   - {name: outdoor_temp,   address: 75,   encoding: temp_f, confidence: confirmed, mirrors: [158]}
   - {name: tank_temp,      address: 157,  encoding: temp_f, confidence: guess, note: "always 0x8000 (no sensor; DHW is a zone here). Placed by order only: the 154-159 mirror block runs outlet, inlet, flue, ?, outdoor, ?, and the MODB-I-O sensor table runs tank, outdoor, system supply"}
@@ -92,11 +92,11 @@ live:
   - {name: fan_tach_period, address: 108, encoding: u16, confidence: likely, note: "r108 * r110 = 3.75e6; inverse of fan speed, stale value at idle; do not publish"}
   - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "8516 when display read 85 percent; display lags by roughly 10 s; 10 percent = min fan, 100 percent = max fan"}
   - {name: firing_rate_requested, address: 131, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "always a multiple of 10; about 1 s ahead of r80"}
-  - {name: setpoint_sh1_target, address: 142, encoding: temp_f, confidence: likely, note: "SH1 setpoint after outdoor reset: 172.1 at 41.3 F outdoor, 167.7 at 43.6 F; stops updating with no call"}
+  - {name: setpoint_sh1_target, address: 142, encoding: temp_f, confidence: likely, note: "SH1 setpoint after outdoor reset: 172.1 at 41.3 F outdoor, 167.7 at 43.6 F; stops updating with no call, so it is published (SH1 Reset Target) only while r118 = 1"}
   - {name: setpoint_sh2_target, address: 143, encoding: temp_f, confidence: likely, note: "equals SH2 setpoint 125"}
   - {name: setpoint_sh3_target, address: 144, encoding: temp_f, confidence: guess, note: "equals SH3 setpoint 125; SH2/SH3 split unverified while both are 125"}
   - {name: setpoint_dhw_target, address: 145, encoding: temp_f, confidence: likely}
-  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2. Backtest: 32.0 F if and only if r118 = 0 in every sample of both sessions, so 32.0 F means no setpoint (the MODB-I-O outlet setpoint uses the same convention); publish none, not 32. This is WinPro's dSP ('highest controlling set point that is active'), which its manual screenshot shows as 32 with no call for heat. r147 equalled r146 in 100 percent of samples; it may be the system setpoint (equal with no system sensor), untested"}
+  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2. Backtest: 32.0 F if and only if r118 = 0 in every sample of both sessions, so 32.0 F means no setpoint (the MODB-I-O outlet setpoint uses the same convention); publish none, not 32. This is WinPro's dSP ('highest controlling set point that is active'), which its manual screenshot shows as 32 with no call for heat. Published as Target Temperature. r147 equalled r146 in 100 percent of samples; it may be the system setpoint (equal with no system sensor), untested"}
 
 status:
   - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 6: prepurge, 7: ignition, 9: running, 10: post-purge}, note: "4 also during anti-cycle, clocked and set point met. 7 seen for 5-10 s between prepurge and running in both ESP32 cycles of session 4, starting with the flame signal; lockout codes not seen yet. If a lockout shows here, compare with the MODB-I-O lockout table (161-240, e.g. 233 no flame after ignition) in cwm12345/lochinvar-modbus enums.py; unverified on this controller. The display status list also has START (safety check before prepurge; maybe 5), SHUTDOWN and BLOCKED; the control locks out after 4 failed ignition tries"}
@@ -126,7 +126,7 @@ counters:
   - {name: ignition_attempts, address: 1304, words: 2, encoding: u32,              confidence: confirmed}
   - {name: ignitions,         address: 1306, words: 2, encoding: u32,              confidence: confirmed}
   - {name: sh_run_time,       address: 1308, words: 2, encoding: u32, unit: h,     confidence: confirmed}
-  - {name: sh_run_time_low_fire, address: 1310, words: 2, encoding: u32, unit: h, confidence: guess, note: "2055 at 10:15 against 3828 SH hours; not DHW run time (display 0). WinPro's fault log has power hours, SH hours, SH hours <50 %, DHW hours in that order, and this is the only one that fits"}
+  - {name: sh_run_time_low_fire, address: 1310, words: 2, encoding: u32, unit: h, confidence: guess, note: "2055 at 10:15 against 3828 SH hours; not DHW run time (display 0). WinPro's fault log has power hours, SH hours, SH hours <50 %, DHW hours in that order, and this is the only one that fits. Published disabled by default (SH Run Time Low Fire)"}
   - {name: sh_cycles,         address: 1312, words: 2, encoding: u32,              confidence: confirmed}
   - {name: dhw_cycles,        address: 1314, words: 2, encoding: u32,              confidence: guess, note: "0 and DHW cycles on display was 0; ignitions - SH cycles = 8 is unexplained"}
 

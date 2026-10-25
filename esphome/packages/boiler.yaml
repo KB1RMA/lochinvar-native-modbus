@@ -58,8 +58,10 @@ modbus_controller:
     on_offline:
       - lambda: |-
           for (auto *s : {id(outlet_temp), id(inlet_temp), id(exhaust_temp), id(outdoor_temp),
-                          id(flame_signal), id(fan_speed), id(firing_rate), id(boiler_pump_output),
-                          id(status_code), id(raw_r138), id(raw_r139), id(raw_r140)})
+                          id(outlet_sensor_diff), id(flue_sensor_diff), id(target_temp),
+                          id(sh1_reset_target), id(flame_signal), id(fan_speed), id(firing_rate),
+                          id(boiler_pump_output), id(status_code), id(raw_r138), id(raw_r139),
+                          id(raw_r140)})
             s->publish_state(NAN);
       - binary_sensor.invalidate_state: heat_demand
       - binary_sensor.invalidate_state: burner_request
@@ -146,6 +148,80 @@ sensor:
     lambda: |-
       if (x == 32768 || x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  # The control's active set point (WinPro's "dSP"). It reads exactly 32.0 F (raw 43036) when there is
+  # no active set point, which in both captures held if and only if Heat Demand was off, so that is
+  # published as unknown, not 32. During a call it tracks SH1 Reset Target below.
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: target_temp
+    name: Target Temperature
+    address: 146
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    icon: mdi:thermometer-check
+    lambda: |-
+      if (x == 32768 || x == 0 || x == 43036) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  # SH1 set point after outdoor reset. The control stops updating it with no call for heat, so it is only
+  # published while Heat Demand is on (r118, read earlier in the same update).
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: sh1_reset_target
+    name: SH1 Reset Target
+    address: 142
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 32768 || x == 0 || !id(heat_demand).state) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  # The outlet and flue sensors are dual thermistors (S1a/S1b at r62/r64, S3a/S3b at r63/r65). The control
+  # faults ("Outlet Temp Diff", "Flue sens diff") when a pair disagrees, so a rising difference is an early
+  # warning; normal is under 1 F. r64 and r65 come in the same read as r62 and r63, which are parsed first.
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: outlet_sensor_diff
+    name: Outlet Sensor Difference
+    address: 64
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature_delta
+    state_class: measurement
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    icon: mdi:thermometer-alert
+    lambda: |-
+      if (x == 32768 || x == 0 || isnan(id(outlet_temp).state)) return NAN;
+      return fabsf(id(outlet_temp).state - (((int) x & 0x7FFF) - 9468) / 25.0f);
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler
+    id: flue_sensor_diff
+    name: Flue Sensor Difference
+    address: 65
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature_delta
+    state_class: measurement
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    icon: mdi:thermometer-alert
+    lambda: |-
+      if (x == 32768 || x == 0 || isnan(id(exhaust_temp).state)) return NAN;
+      return fabsf(id(exhaust_temp).state - (((int) x & 0x7FFF) - 9468) / 25.0f);
 
   - platform: modbus_controller
     modbus_controller_id: boiler
@@ -351,6 +427,19 @@ sensor:
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
+
+  # Map confidence "guess": WinPro's "SH hours <50 %" by order (2055 h against 3828 SH hours).
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH Run Time Low Fire
+    address: 1310
+    register_type: holding
+    value_type: U_DWORD
+    unit_of_measurement: "h"
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    disabled_by_default: true
 
   - platform: modbus_controller
     modbus_controller_id: boiler_slow

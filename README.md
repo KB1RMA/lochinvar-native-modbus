@@ -23,10 +23,14 @@ image `ghcr.io/kb1rma/lochinvar-native-modbus` for the container.
 
 Once it is running, Home Assistant shows things like:
 
-- **Temperatures:** water going out, water coming back, exhaust, and outdoor air
+- **Temperatures:** water going out, water coming back, exhaust, outdoor air, and the temperature the
+  boiler is aiming for during a call for heat
+- **Sensor health:** how far apart the paired outlet and flue sensors read (the boiler faults when they
+  disagree, so a growing gap is an early warning)
 - **Burner:** firing rate, flame signal, fan speed, and whether the flame is on
 - **Status:** standby, prepurge, running, post-purge, heat demand, and anti-cycle wait
-- **Settings:** the set points for space heat and hot water, and the high limits
+- **Settings:** the set points for space heat and hot water, the high limits, and the heating set point
+  after outdoor reset (while heating)
 - **Counters:** hours powered on, heating run time, cycles, and ignition attempts
 
 ## It only reads. It never writes.

@@ -17,6 +17,14 @@ import (
 // renamed lists entities that differ on purpose (see entities.go).
 var renamed = map[string]string{"Link Watchdog Restarts": "Link Reconnects"}
 
+// combined lists register entities whose lambda also uses another entity's reading; the bridge does
+// the same in its poll loop (tested there).
+var combined = map[string]string{
+	"Outlet Sensor Difference": "outlet_temp",
+	"Flue Sensor Difference":   "exhaust_temp",
+	"SH1 Reset Target":         "heat_demand",
+}
+
 // espFilter is one ESPHome filter, e.g. {multiply: 0.01} or {invert: null}.
 type espFilter map[string]any
 
@@ -175,6 +183,9 @@ func checkEntity(t *testing.T, esp espEntity, ours entities.Entity) {
 		eq("150 °F decodes", ok && math.Abs(got-150) < 1e-9, true)
 		eq("0 dropped", ours.Decode(0).Valid(), false)
 		eq("0x8000 dropped", !ours.Decode(0x8000).Valid(), strings.Contains(esp.Lambda, "32768"))
+		eq("43036 (32.0 °F) dropped", !ours.Decode(43036).Valid(), strings.Contains(esp.Lambda, "43036"))
+		uses, ok := combined[esp.Name]
+		eq("combined", strings.Contains(esp.Lambda, "id("+uses+")"), ok)
 	default:
 		factor := 1.0
 		for _, f := range esp.Filters {
