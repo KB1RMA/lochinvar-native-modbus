@@ -224,6 +224,31 @@ func TestNoReopenBeforeFirstAnswer(t *testing.T) {
 	expect(t, "status", f.out.status(), "Link lost")
 }
 
+func TestExceptionKeepsLinkUpWithoutReopen(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.bridge.Step(at(0))
+	f.boiler.SetException(6)
+	if wait := f.bridge.Step(at(5)); wait != 30*time.Second {
+		t.Errorf("backoff %v, want 30s", wait)
+	}
+	o := f.out
+	expect(t, "link", o.last["lochinvar/link"], "online")
+	expect(t, "status", o.status(), "Unavailable")
+	expect(t, "outlet", o.state("outlet_temp"), "None")
+	expect(t, "SH1 keeps its value", o.state("setpoint_sh1"), "180")
+	for s := 35.0; s < 3600; s += 30 {
+		f.bridge.Step(at(s))
+	}
+	if n := f.boiler.Opened(); n != 1 {
+		t.Fatalf("opened %d times, want 1: an exception is an answer, not a dead link", n)
+	}
+	f.boiler.SetException(0)
+	f.bridge.Step(at(3605)) // polls back off to every 30 s, like a silent link
+	expect(t, "outlet", o.state("outlet_temp"), "150.0")
+	expect(t, "status", o.status(), "Running")
+}
+
 func TestPortErrorRetriesEveryTenSeconds(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

@@ -7,6 +7,8 @@
 // help doubles the wait (up to 30 min), to limit open/close cycles (the macOS FTDI driver has wedged
 // after many). Like the ESP's watchdog, this only arms once the boiler has answered since start, so a
 // boiler that is off does not cause a reopen loop. Port errors (adapter unplugged) retry every 10 s.
+// A Modbus exception reply is not a link loss: the boiler answered, so the link stays up and the port
+// is never reopened for it; that poll's readings are cleared and Boiler Status reads "Unavailable".
 package bridge
 
 import (
@@ -209,17 +211,22 @@ func (b *Bridge) linkDown(now time.Time) {
 		slog.Warn("boiler link lost")
 		b.state = linkDown
 		b.pub.Publish(b.topics.Link(), discovery.Offline, true)
-		for _, g := range []entities.Group{entities.Fast, entities.Derived} {
-			for _, e := range entities.InGroup(g) {
-				b.set(e.Key, decode.None)
-			}
-		}
-		b.set(entities.BoilerStatus, decode.Text("Link lost"))
+		b.clearFast("Link lost")
 	}
 	b.status = decode.None
 	if b.linkSeenOK && b.linkDownSince.IsZero() {
 		b.linkDownSince = now
 	}
+}
+
+// clearFast clears the live readings and sets Boiler Status.
+func (b *Bridge) clearFast(boilerStatus string) {
+	for _, g := range []entities.Group{entities.Fast, entities.Derived} {
+		for _, e := range entities.InGroup(g) {
+			b.set(e.Key, decode.None)
+		}
+	}
+	b.set(entities.BoilerStatus, decode.Text(boilerStatus))
 }
 
 func (b *Bridge) portError(now time.Time, err error) {
@@ -240,10 +247,17 @@ func (b *Bridge) maybeReopen(now time.Time) {
 	b.nextPort = now.Add(2 * time.Second)
 }
 
-// readBlocks returns address -> raw, or ok = false if a block got no reply or an exception. Port
-// errors are returned.
-func (b *Bridge) readBlocks(blocks []Block) (regs map[uint16]uint16, ok bool, err error) {
-	regs = make(map[uint16]uint16)
+type readResult uint8
+
+const (
+	readOK        readResult = iota
+	readNoReply              // the boiler did not answer
+	readException            // the boiler answered with a Modbus exception
+)
+
+// readBlocks returns address -> raw and how the read went. Port errors are returned.
+func (b *Bridge) readBlocks(blocks []Block) (map[uint16]uint16, readResult, error) {
+	regs := make(map[uint16]uint16)
 	for _, blk := range blocks {
 		values, err := b.link.Read(blk.Start, blk.Count)
 		var exc *modbus.ExceptionError
@@ -251,28 +265,38 @@ func (b *Bridge) readBlocks(blocks []Block) (regs map[uint16]uint16, ok bool, er
 		case err == nil:
 		case errors.As(err, &exc):
 			slog.Warn("read failed", "start", blk.Start, "count", blk.Count, "err", err)
-			return nil, false, nil
+			return nil, readException, nil
 		case errors.Is(err, modbus.ErrNoReply):
-			return nil, false, nil
+			return nil, readNoReply, nil
 		default:
-			return nil, false, err
+			return nil, readNoReply, err
 		}
 		for i, v := range values {
 			regs[blk.Start+uint16(i)] = v
 		}
 	}
-	return regs, true, nil
+	return regs, readOK, nil
 }
 
 func (b *Bridge) pollFast(now time.Time) (bool, error) {
-	regs, ok, err := b.readBlocks(FastBlocks)
+	regs, res, err := b.readBlocks(FastBlocks)
 	if err != nil {
 		return false, err
 	}
-	if !ok {
+	switch res {
+	case readOK:
+	case readNoReply:
 		b.linkDown(now)
 		b.nextFast = now.Add(b.opt.FastInterval * time.Duration(b.opt.OfflineSkip)) // back off like the ESP
 		b.maybeReopen(now)
+		return false, nil
+	case readException:
+		// The boiler answered, so the link is up and reopening the port would not help. Only this
+		// poll's readings are unusable.
+		b.linkUp()
+		b.clearFast("Unavailable")
+		b.status = decode.None
+		b.nextFast = now.Add(b.opt.FastInterval * time.Duration(b.opt.OfflineSkip))
 		return false, nil
 	}
 	b.linkUp()
@@ -297,11 +321,11 @@ func (b *Bridge) pollFast(now time.Time) (bool, error) {
 }
 
 func (b *Bridge) pollSlow(now time.Time) error {
-	regs, ok, err := b.readBlocks(SlowBlocks)
+	regs, res, err := b.readBlocks(SlowBlocks)
 	if err != nil {
 		return err
 	}
-	if !ok {
+	if res != readOK {
 		b.nextSlow = now.Add(b.opt.FastInterval * time.Duration(b.opt.OfflineSkip))
 		return nil
 	}

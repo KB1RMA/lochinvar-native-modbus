@@ -4,7 +4,8 @@ run-name: Publish MQTT image ${{ inputs.tag }}
 # Builds the Go MQTT bridge in mqtt/ for amd64, arm64 and arm/v7 (Raspberry Pi) and pushes it to GHCR as
 # X.Y.Z, X.Y and latest. release-please.yml calls this when it releases the mqtt component; run it by
 # hand (Actions > Publish MQTT Image > Run workflow) to rebuild an existing release, e.g. for a newer
-# base image.
+# base image. X.Y and latest only move when the tag is the newest release of its minor version and
+# overall, so rebuilding an older release never moves them back.
 
 permissions:
   contents: read
@@ -49,6 +50,17 @@ jobs:
         with:
           ref: refs/tags/${{ inputs.tag }}
 
+      - name: Decide which floating tags move
+        run: |
+          versions=$(git ls-remote --tags --refs origin 'mqtt-v*' | sed 's|.*refs/tags/mqtt-v||' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
+          newest=$(tail -n 1 <<< "$versions")
+          minor=${VERSION%.*}
+          newest_minor=$(grep -E "^${minor//./\\.}\.[0-9]+$" <<< "$versions" | tail -n 1)
+          echo "LATEST=$([[ "$VERSION" == "$newest" ]] && echo true || echo false)" >> "$GITHUB_ENV"
+          echo "MINOR=$([[ "$VERSION" == "$newest_minor" ]] && echo true || echo false)" >> "$GITHUB_ENV"
+          echo "Newest release $newest, newest $minor.x $newest_minor; building $VERSION"
+
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
@@ -63,8 +75,8 @@ jobs:
           images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}},value=${{ env.VERSION }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ env.MINOR }}
+            type=raw,value=latest,enable=${{ env.LATEST }}
           labels: |
             org.opencontainers.image.title=lochinvar-native-modbus MQTT bridge
             org.opencontainers.image.description=Read-only Modbus RTU to MQTT bridge with Home Assistant discovery for a Lochinvar boiler

@@ -45,10 +45,14 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	defer stop()
 
 	topics := discovery.Topics{Prefix: cfg.TopicPrefix, DiscoveryPrefix: cfg.DiscoveryPrefix, DeviceID: cfg.DeviceID}
-	out := mqttout.New(mqttout.Settings{
+	out, err := mqttout.New(mqttout.Settings{
 		Host: cfg.MQTTHost, Port: cfg.MQTTPort, Username: cfg.MQTTUsername, Password: cfg.MQTTPassword,
-		ClientID: cfg.MQTTClientID, TLS: cfg.MQTTTLS,
+		ClientID: cfg.MQTTClientID, TLS: cfg.MQTTTLS, CAFile: cfg.MQTTCAFile,
 	}, topics)
+	if err != nil {
+		slog.Error("cannot set up MQTT", "err", err)
+		return 2
+	}
 	b := bridge.New(modbus.NewLink(cfg.SerialPort, cfg.SlaveID), out, topics, cfg.DeviceName, bridge.Options{
 		FastInterval: cfg.FastInterval, SlowInterval: cfg.SlowInterval,
 	})

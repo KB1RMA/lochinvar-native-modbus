@@ -62,9 +62,10 @@ Debian, Ubuntu and Raspberry Pi OS. If your host's device belongs to another gro
 | `SERIAL_PORT` | `/dev/ttyUSB0` | Serial device inside the container |
 | `MODBUS_SLAVE_ID` | `1` | The boiler's Modbus address |
 | `MQTT_HOST` | `localhost` | MQTT broker |
-| `MQTT_PORT` | `1883` | |
+| `MQTT_PORT` | `1883`, or `8883` with TLS | |
 | `MQTT_USERNAME`, `MQTT_PASSWORD` | none | |
-| `MQTT_TLS` | `false` | `true` to connect with TLS (system CA certificates) |
+| `MQTT_TLS` | `false` | `true` to connect with TLS (system CA certificates unless `MQTT_CA_FILE` is set) |
+| `MQTT_CA_FILE` | none | PEM CA certificate(s) to verify the broker with, e.g. a self-signed broker's CA; mount it with `-v` |
 | `MQTT_CLIENT_ID` | `lochinvar-native-modbus` | |
 | `MQTT_TOPIC_PREFIX` | `lochinvar` | Base topic for state and availability |
 | `DISCOVERY_PREFIX` | `homeassistant` | Home Assistant's MQTT discovery prefix |
@@ -99,6 +100,10 @@ the serial port instead. Each reopen that doesn't help doubles the wait, up to 3
 the FTDI driver stopped working after many open/close cycles. "Link Reconnects" counts reopens since the
 container started. Like the ESP, this only starts once the boiler has answered at least once. If the
 adapter disappears (cable unplugged), the bridge tries to open it again every 10 seconds.
+
+A Modbus exception reply is not a dropped link: the boiler answered, so "Boiler Link OK" stays on and the
+port is never reopened for it. The live readings are cleared, Boiler Status reads "Unavailable", and the
+bridge tries again every 30 seconds.
 
 If only unplugging and replugging the USB cable brings the link back, that is what happened on the Mac too.
 See "Known problems" in the main README.

@@ -4,9 +4,11 @@ package mqttout
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -20,7 +22,12 @@ type Settings struct {
 	Host, Username, Password, ClientID string
 	Port                               int
 	TLS                                bool
+	CAFile                             string // PEM file to verify the broker with instead of the system roots
 }
+
+// writeTimeout bounds each Publish. Without it paho waits up to 30 s per message for a stalled
+// connection, which would hold up the Modbus poll loop.
+const writeTimeout = 2 * time.Second
 
 // Client publishes to the broker. Publish is safe for concurrent use.
 type Client struct {
@@ -28,8 +35,8 @@ type Client struct {
 	republish chan struct{}
 }
 
-// New prepares a client; call Connect to start it.
-func New(s Settings, topics discovery.Topics) *Client {
+// New prepares a client; call Connect to start it. It fails only when the CA file cannot be used.
+func New(s Settings, topics discovery.Topics) (*Client, error) {
 	c := &Client{republish: make(chan struct{}, 1)}
 	var attempts atomic.Int64 // connection attempts since the last successful connect
 	scheme := "tcp"
@@ -43,6 +50,7 @@ func New(s Settings, topics discovery.Topics) *Client {
 		SetPassword(s.Password).
 		SetWill(topics.Status(), discovery.Offline, 1, true).
 		SetKeepAlive(60 * time.Second).
+		SetWriteTimeout(writeTimeout).
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
 		SetConnectRetryInterval(5 * time.Second).
@@ -72,10 +80,21 @@ func New(s Settings, topics discovery.Topics) *Client {
 			slog.Info("reconnecting to MQTT", "host", s.Host, "port", s.Port)
 		})
 	if s.TLS {
-		opts.SetTLSConfig(&tls.Config{MinVersion: tls.VersionTLS12, ServerName: s.Host})
+		cfg := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: s.Host}
+		if s.CAFile != "" {
+			pem, err := os.ReadFile(s.CAFile)
+			if err != nil {
+				return nil, fmt.Errorf("MQTT CA file: %w", err)
+			}
+			cfg.RootCAs = x509.NewCertPool()
+			if !cfg.RootCAs.AppendCertsFromPEM(pem) {
+				return nil, fmt.Errorf("MQTT CA file %s: no PEM certificates", s.CAFile)
+			}
+		}
+		opts.SetTLSConfig(cfg)
 	}
 	c.client = paho.NewClient(opts)
-	return c
+	return c, nil
 }
 
 func (c *Client) signal() {

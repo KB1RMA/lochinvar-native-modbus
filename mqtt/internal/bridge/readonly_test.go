@@ -100,6 +100,42 @@ func TestOnlyTheModbusLinkWritesToThePort(t *testing.T) {
 	}
 }
 
+// The Write check above only sees calls named Write. Writing to the port by other means needs the port
+// itself, so only internal/modbus may open it, and that package may not use the helpers that write to
+// an io.Writer.
+func TestOnlyTheModbusPackageReachesThePort(t *testing.T) {
+	t.Parallel()
+	writers := map[string]bool{
+		"fmt.Fprint": true, "fmt.Fprintf": true, "fmt.Fprintln": true,
+		"io.WriteString": true, "io.Copy": true, "io.CopyN": true, "io.CopyBuffer": true,
+	}
+	for path, f := range sources(t) {
+		inModbus := strings.HasPrefix(path, "internal/modbus/")
+		for _, imp := range f.Imports {
+			p := strings.Trim(imp.Path.Value, `"`)
+			if p == "go.bug.st/serial" && !inModbus {
+				t.Errorf("%s imports %s; only internal/modbus may open the port", path, p)
+			}
+			if p == "bufio" && inModbus {
+				t.Errorf("%s imports bufio; write to the port only in link.go", path)
+			}
+		}
+		if !inModbus {
+			continue
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if sel, ok := call.Fun.(*ast.SelectorExpr); ok {
+					if pkg, ok := sel.X.(*ast.Ident); ok && writers[pkg.Name+"."+sel.Sel.Name] {
+						t.Errorf("%s calls %s.%s; write to the port only in link.go", path, pkg.Name, sel.Sel.Name)
+					}
+				}
+			}
+			return true
+		})
+	}
+}
+
 func TestOnlyFunction03Defined(t *testing.T) {
 	t.Parallel()
 	for path, f := range sources(t) {

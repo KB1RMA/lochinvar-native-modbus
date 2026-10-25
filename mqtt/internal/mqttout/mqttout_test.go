@@ -2,6 +2,8 @@ package mqttout_test
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -62,7 +64,10 @@ func TestConnectPublishAndRepublishSignals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := mqttout.New(mqttout.Settings{Host: "127.0.0.1", Port: port, ClientID: "test-bridge"}, topics)
+	c, err := mqttout.New(mqttout.Settings{Host: "127.0.0.1", Port: port, ClientID: "test-bridge"}, topics)
+	if err != nil {
+		t.Fatal(err)
+	}
 	c.Connect()
 	t.Cleanup(func() { c.Close(100 * time.Millisecond) })
 	waitSignal(t, c.Republish(), "connecting")
@@ -101,6 +106,21 @@ func TestConnectPublishAndRepublishSignals(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("no republish signal after Home Assistant came online")
+		}
+	}
+}
+
+func TestBadCAFile(t *testing.T) {
+	t.Parallel()
+	notPEM := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(notPEM, []byte("not a certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{filepath.Join(t.TempDir(), "missing.pem"), notPEM} {
+		_, err := mqttout.New(mqttout.Settings{Host: "broker", Port: 8883, TLS: true, CAFile: path},
+			discovery.DefaultTopics())
+		if err == nil {
+			t.Errorf("New with CA file %s succeeded, want an error", path)
 		}
 	}
 }

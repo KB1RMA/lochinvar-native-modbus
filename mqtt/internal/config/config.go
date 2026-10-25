@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +24,7 @@ type Config struct {
 	MQTTUsername    string
 	MQTTPassword    string
 	MQTTTLS         bool
+	MQTTCAFile      string
 	MQTTClientID    string
 	TopicPrefix     string
 	DiscoveryPrefix string
@@ -47,7 +50,7 @@ func Load(args []string, getenv func(string) string, out io.Writer) (Config, err
 		fs.PrintDefaults()
 	}
 
-	var errs []error
+	envErrs := map[string]error{} // flag name -> bad environment value; a flag given on the command line wins
 	str := func(p *string, name, env, def, usage string) {
 		v := def
 		if e := getenv(env); e != "" {
@@ -60,7 +63,7 @@ func Load(args []string, getenv func(string) string, out io.Writer) (Config, err
 		if e := getenv(env); e != "" {
 			n, err := strconv.Atoi(e)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", env, err))
+				envErrs[name] = fmt.Errorf("%s: %w", env, err)
 			}
 			v = n
 		}
@@ -71,7 +74,7 @@ func Load(args []string, getenv func(string) string, out io.Writer) (Config, err
 		if e := getenv(env); e != "" {
 			b, err := strconv.ParseBool(e)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", env, err))
+				envErrs[name] = fmt.Errorf("%s: %w", env, err)
 			}
 			v = b
 		}
@@ -82,12 +85,12 @@ func Load(args []string, getenv func(string) string, out io.Writer) (Config, err
 		if e := getenv(env); e != "" {
 			d, err := parseDuration(e)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", env, err))
+				envErrs[name] = fmt.Errorf("%s: %w", env, err)
 			}
 			v = d
 		}
+		*p = v // before Var, which takes the default shown in the help from it
 		fs.Var(durationValue{p}, name, fmt.Sprintf("%s, e.g. 5s or 5 (seconds) [%s]", usage, env))
-		*p = v
 	}
 
 	var slave int
@@ -95,10 +98,11 @@ func Load(args []string, getenv func(string) string, out io.Writer) (Config, err
 	str(&c.SerialPort, "serial-port", "SERIAL_PORT", "/dev/ttyUSB0", "serial device of the boiler's FT232R")
 	num(&slave, "slave-id", "MODBUS_SLAVE_ID", 1, "Modbus slave address")
 	str(&c.MQTTHost, "mqtt-host", "MQTT_HOST", "localhost", "MQTT broker host")
-	num(&c.MQTTPort, "mqtt-port", "MQTT_PORT", 1883, "MQTT broker port")
+	num(&c.MQTTPort, "mqtt-port", "MQTT_PORT", 1883, "MQTT broker port (8883 by default with TLS)")
 	str(&c.MQTTUsername, "mqtt-username", "MQTT_USERNAME", "", "MQTT username")
 	str(&c.MQTTPassword, "mqtt-password", "MQTT_PASSWORD", "", "MQTT password")
 	boolean(&c.MQTTTLS, "mqtt-tls", "MQTT_TLS", "connect to the broker with TLS")
+	str(&c.MQTTCAFile, "mqtt-ca-file", "MQTT_CA_FILE", "", "PEM CA certificate(s) to verify the broker with, instead of the system roots")
 	str(&c.MQTTClientID, "mqtt-client-id", "MQTT_CLIENT_ID", "lochinvar-native-modbus", "MQTT client id")
 	str(&c.TopicPrefix, "topic-prefix", "MQTT_TOPIC_PREFIX", "lochinvar", "base topic for state and availability")
 	str(&c.DiscoveryPrefix, "discovery-prefix", "DISCOVERY_PREFIX", "homeassistant", "Home Assistant discovery prefix")
@@ -109,11 +113,25 @@ func Load(args []string, getenv func(string) string, out io.Writer) (Config, err
 	str(&level, "log-level", "LOG_LEVEL", "info", "debug, info, warn or error")
 	fs.BoolVar(&c.ShowVersion, "version", false, "print the version and exit")
 
+	if err := fs.Parse(args); err != nil {
+		return Config{}, err
+	}
+	if c.ShowVersion {
+		return c, nil
+	}
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(envErrs)) {
+		if !set[name] {
+			errs = append(errs, envErrs[name])
+		}
+	}
 	if err := errors.Join(errs...); err != nil {
 		return Config{}, err
 	}
-	if err := fs.Parse(args); err != nil {
-		return Config{}, err
+	if c.MQTTTLS && !set["mqtt-port"] && getenv("MQTT_PORT") == "" {
+		c.MQTTPort = 8883
 	}
 	if fs.NArg() > 0 {
 		return Config{}, fmt.Errorf("unexpected arguments: %v", fs.Args())

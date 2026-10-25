@@ -88,9 +88,53 @@ func TestHelp(t *testing.T) {
 	if !errors.Is(err, config.ErrHelp) {
 		t.Fatalf("err = %v, want ErrHelp", err)
 	}
-	for _, want := range []string{"MQTT_HOST", "SERIAL_PORT", "-fast-interval"} {
+	for _, want := range []string{"MQTT_HOST", "SERIAL_PORT", "-fast-interval", "(default 5s)", "(default 5m0s)"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("help does not mention %s", want)
+		}
+	}
+}
+
+func TestFlagOverridesBadEnvironment(t *testing.T) {
+	t.Parallel()
+	e := env(map[string]string{"MQTT_PORT": "abc", "FAST_INTERVAL": "soon"})
+	c, err := config.Load([]string{"--mqtt-port", "1884", "--fast-interval", "2s"}, e, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.MQTTPort != 1884 || c.FastInterval != 2*time.Second {
+		t.Errorf("flags not applied: %+v", c)
+	}
+}
+
+func TestVersionIgnoresBadEnvironment(t *testing.T) {
+	t.Parallel()
+	c, err := config.Load([]string{"--version"}, env(map[string]string{"MQTT_PORT": "abc"}), io.Discard)
+	if err != nil || !c.ShowVersion {
+		t.Fatalf("--version: %+v, %v", c, err)
+	}
+}
+
+func TestTLSPort(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		args []string
+		env  map[string]string
+		want int
+	}{
+		{[]string{"--mqtt-tls"}, nil, 8883},
+		{nil, map[string]string{"MQTT_TLS": "true"}, 8883},
+		{[]string{"--mqtt-tls", "--mqtt-port", "1883"}, nil, 1883},
+		{nil, map[string]string{"MQTT_TLS": "true", "MQTT_PORT": "8884"}, 8884},
+		{nil, nil, 1883},
+	}
+	for _, tt := range tests {
+		c, err := config.Load(tt.args, env(tt.env), io.Discard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.MQTTPort != tt.want {
+			t.Errorf("Load(%v, %v) port %d, want %d", tt.args, tt.env, c.MQTTPort, tt.want)
 		}
 	}
 }
