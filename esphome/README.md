@@ -28,16 +28,16 @@ The link settings are 19200 baud, 8N1, device ID 1. The package sets these for y
 
 ## Setting it up
 
-The bridge is an [ESPHome](https://esphome.io) package. You keep a short config for your own board
-(name, Wi-Fi, how it talks to Home Assistant) and add two lines that pull the boiler part from
-GitHub. You never copy the sensors into your own file.
+The bridge is an [ESPHome](https://esphome.io) package. Your own config stays short. It has your
+board's name, your Wi-Fi, and how it talks to Home Assistant. Then two lines pull in the boiler part
+from GitHub. You never copy the sensors into your own file.
 
 ### Quick start with ESPHome Device Builder
 
 1. Wire the board as described above.
-2. In ESPHome Device Builder (the ESPHome add-on or dashboard), click **New device**, give it a
-   name such as `boiler`, and pick **ESP32-S3**. Device Builder writes the board, Wi-Fi, API and OTA
-   parts for you.
+2. Open ESPHome Device Builder. This is the ESPHome add-on or dashboard. Click **New device**.
+   Name it something like `boiler` and pick **ESP32-S3**. Device Builder fills in the board, Wi-Fi,
+   API and OTA parts for you.
 3. Click **Edit** and add these lines at the end of the file:
 
    ```yaml
@@ -49,8 +49,9 @@ GitHub. You never copy the sensors into your own file.
 4. Make sure the `esp32:` block uses the ESP-IDF framework (`type: esp-idf`). The USB host needs it.
 5. Click **Install**. The first time, plug the board's **COM** port into your computer and choose
    "Plug into this computer". After that, updates go over Wi-Fi.
-6. Home Assistant finds the new device under **Settings > Devices & services**. Click **Configure**
-   to add it. If it asks for an encryption key, copy the `key:` from the device's config.
+6. In Home Assistant, go to **Settings > Devices & services**. The new device shows up there.
+   Click **Configure** to add it. If it asks for a key, copy the `key:` line from the device's
+   config.
 
 ### Full example (Home Assistant API)
 
@@ -89,8 +90,8 @@ Entities show up in Home Assistant as `sensor.boiler_outlet_temperature`,
 
 ### Using MQTT instead of the API
 
-Swap the `api:` block for `mqtt:`. Home Assistant picks the entities up through MQTT discovery,
-which is on by default.
+Swap the `api:` block for `mqtt:`. Home Assistant then finds the sensors on its own. This is called
+MQTT discovery, and it is on by default.
 
 ```yaml
 mqtt:
@@ -101,9 +102,9 @@ mqtt:
 
 ### Pinning and updating
 
-The `@esphome-v...` at the end of each line pins a release, so your boiler setup won't change by
-surprise. To update, change the version in **both** lines to the new release and click **Install**.
-Releases and their changes are listed in [CHANGELOG.md](CHANGELOG.md).
+The `@esphome-v...` at the end of each line locks you to one release. That way your boiler setup
+won't change by surprise. To update, change the version in **both** lines and click **Install**.
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
 
 ### Choosing a transport
 
@@ -111,21 +112,21 @@ The `transport` line picks how the ESP32 reaches the boiler:
 
 - `usb-ft232.yaml`: the ESP32-S3 talks to the boiler's USB port. **This is the tested way.**
 - `uart.yaml`: uses the ESP32's own serial pins. This has not been tested. It only helps if you
-  reach the boiler's serial line some other way. Set the pins with `substitutions:`
-  (`uart_tx_pin`, `uart_rx_pin`; the defaults are GPIO17 and GPIO16).
+  reach the boiler's serial line some other way. To pick the pins, set `uart_tx_pin` and
+  `uart_rx_pin` under `substitutions:`. They default to GPIO17 and GPIO16.
 
-`boiler.yaml` sets up Modbus and all the sensors, and works with either transport.
+`boiler.yaml` sets up Modbus and all the sensors. It works with either transport.
 
 ### Building from a copy of this repo
 
-Use [`lochinvar.yaml`](lochinvar.yaml), which includes the packages from the local folder. Copy
+Use [`lochinvar.yaml`](lochinvar.yaml). It loads the packages from your copy instead of GitHub. Copy
 `secrets.example.yaml` to `secrets.yaml` and fill in your Wi-Fi and MQTT details.
 
 ## When the link drops
 
-While the boiler does not answer, the readings show as unavailable, "Boiler Link OK" turns off, and
-Boiler Status reads "Link lost". After 3 minutes down, the ESP restarts itself, and "Link Watchdog
-Restarts" counts how often that happened.
+Sometimes the boiler stops answering. When it does, the readings show as unavailable and
+"Boiler Link OK" turns off. Boiler Status reads "Link lost". If the link stays down for 3 minutes,
+the ESP restarts itself. "Link Watchdog Restarts" counts how often that happened.
 
 ## Files
 
