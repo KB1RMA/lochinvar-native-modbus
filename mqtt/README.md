@@ -70,6 +70,13 @@ The `latest` tag always points to the newest release. Images are built for 64-bi
 ARM (arm64) and 32-bit ARM (arm/v7). [CHANGELOG.md](CHANGELOG.md) lists the changes once the first
 release is out.
 
+Each image has a signed build provenance attestation, made by this repository's release workflow. To check
+that an image was built here from the release tag, run:
+
+```sh
+gh attestation verify oci://ghcr.io/kb1rma/lochinvar-native-modbus:0.0.0 -R KB1RMA/lochinvar-native-modbus # x-release-please-version
+```
+
 ### Serial port permissions
 
 The container does not run as root. It runs as a user in group 20. On Debian, Ubuntu and Raspberry Pi

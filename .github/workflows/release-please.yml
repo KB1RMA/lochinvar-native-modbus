@@ -74,6 +74,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # the called workflow signs a provenance attestation
+      attestations: write
     uses: ./.github/workflows/docker-publish.yml
     with:
       tag: ${{ needs.release-please.outputs.mqtt-tag }}

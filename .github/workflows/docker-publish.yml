@@ -35,6 +35,8 @@ jobs:
     permissions:
       contents: read
       packages: write # push to ghcr.io
+      id-token: write # sign the provenance attestation with Sigstore
+      attestations: write # record it in the repository's attestations
     steps:
       - name: Check the tag
         env:
@@ -82,7 +84,8 @@ jobs:
             org.opencontainers.image.description=Read-only Modbus RTU to MQTT bridge with Home Assistant discovery for a Lochinvar boiler
             org.opencontainers.image.source=https://github.com/KB1RMA/lochinvar-native-modbus
 
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: mqtt
           platforms: linux/amd64,linux/arm64,linux/arm/v7
@@ -93,3 +96,12 @@ jobs:
           cache-to: type=gha,scope=mqtt,mode=max
           provenance: mode=max
           sbom: true
+
+      # BuildKit's provenance and SBOM above are unsigned. This adds a signed SLSA provenance
+      # attestation for the image index, checked with:
+      #   gh attestation verify oci://ghcr.io/kb1rma/lochinvar-native-modbus:X.Y.Z -R KB1RMA/lochinvar-native-modbus
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

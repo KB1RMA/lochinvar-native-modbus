@@ -35,7 +35,8 @@ root README) release neither.
   (`cmd/lochinvar-mqtt`, `internal/...`; deps go.bug.st/serial and paho.mqtt.golang, mochi-mqtt only in tests),
   a distroless Dockerfile that cross-compiles for amd64/arm64/arm/v7, and tests. Version lives in
   `internal/version/version.go`. `docker-publish.yml` pushes on an mqtt release (called from
-  `release-please.yml`, or run by hand with a tag). CI (`validate.yml`): `go mod tidy -diff`, `go mod verify`,
+  `release-please.yml`, or run by hand with a tag) with a signed provenance attestation
+  (`actions/attest-build-provenance`; the caller must grant `id-token` and `attestations: write`). CI (`validate.yml`): `go mod tidy -diff`, `go mod verify`,
   `go vet`, golangci-lint v2 (`mqtt/.golangci.yml`, pinned version in the workflow), `go test -race -shuffle=on`,
   a 15 s fuzz of the request builder, govulncheck, and a multi-arch image build. The tests check parity with
   `boiler.yaml` (names, addresses, units, decoding), every address against the map, that every frame sent is a
