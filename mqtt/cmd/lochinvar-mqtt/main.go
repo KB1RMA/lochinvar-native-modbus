@@ -40,6 +40,9 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel})))
 	slog.Info("lochinvar-native-modbus MQTT bridge (read-only, function 03)", "version", version.Version)
+	if cfg.ConfigFile != "" {
+		slog.Info("read settings", "config_file", cfg.ConfigFile)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -53,8 +56,10 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 		slog.Error("cannot set up MQTT", "err", err)
 		return 2
 	}
-	b := bridge.New(modbus.NewLink(cfg.SerialPort, cfg.SlaveID), out, topics, cfg.DeviceName, bridge.Options{
+	link := modbus.NewLink(cfg.SerialPort, cfg.SlaveID, modbus.WithTimeout(cfg.ModbusTimeout))
+	b := bridge.New(link, out, topics, cfg.DeviceName, bridge.Options{
 		FastInterval: cfg.FastInterval, SlowInterval: cfg.SlowInterval,
+		ReopenAfter: cfg.ReopenAfter, ReopenMax: cfg.ReopenMax,
 	})
 
 	out.Connect()

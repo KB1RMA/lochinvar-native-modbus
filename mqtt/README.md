@@ -1,24 +1,27 @@
 # MQTT bridge (Docker)
 
-Run the bridge as a Docker container on a computer next to the boiler, such as a Raspberry Pi. The
-boiler's USB cable plugs into that computer. The container reads the boiler and publishes to your MQTT
-broker, with Home Assistant discovery. You get the same entities as the [ESPHome package](../esphome/README.md).
-See the [main README](../README.md) for what you get and how the project works.
+This is a small program that runs in a Docker container. It reads your boiler and sends the readings to
+your MQTT broker. Home Assistant then finds the boiler on its own. You get the same sensors as the
+[ESPHome package](../esphome/README.md). See the [main README](../README.md) for the full list and how
+the project works.
+
+Run it on a computer near the boiler, like a Raspberry Pi or a home server. The boiler's USB cable plugs
+into that computer.
 
 ```
 Boiler controller  --USB cable-->  computer running Docker  -->  MQTT broker  -->  Home Assistant
 ```
 
-**It only reads.** The only Modbus request it can build is function 03 (read holding registers). It has
-no Modbus library, so there is no write code inside it at all. It is a single static Go binary in a
-small image with no shell. Its tests check that every frame it sends is
-a function 03 read of one of four blocks, the same blocks the project's logger has always read.
+**It only reads.** It can only send one kind of Modbus request: function 03, which reads values. It has
+no code that can write to the boiler or change a setting. The tests check this. They make sure every
+message it sends is a function 03 read of one of four known blocks. These are the same blocks the
+project has always read.
 
 ## Running it
 
-Plug the boiler's USB cable into the computer. The boiler's FTDI chip shows up as a serial device,
-usually `/dev/ttyUSB0`. Use the stable name under `/dev/serial/by-id/` if you can, so the device
-keeps its name after a replug:
+Plug the boiler's USB cable into the computer. The boiler shows up as a serial device, most often
+`/dev/ttyUSB0`. That name can change when you unplug the cable. A better choice is the fixed name under
+`/dev/serial/by-id/`. To find it, run:
 
 ```bash
 ls /dev/serial/by-id/
@@ -48,88 +51,148 @@ services:
       MQTT_PASSWORD: secret
 ```
 
-The image tag pins a release. `X.Y` follows the newest patch release, and `latest` the newest release.
-Images are built for amd64, arm64 and 32-bit ARM (arm/v7). Changes are listed in
-[CHANGELOG.md](CHANGELOG.md) once the first release is out.
+### Other container platforms
 
-The container runs as an unprivileged user in group `dialout` (gid 20), which owns serial devices on
-Debian, Ubuntu and Raspberry Pi OS. If your host's device belongs to another group, add `--group-add <gid>`.
+Any platform that runs Docker images works, such as Unraid, TrueNAS, Portainer or Synology. Look for
+these four things in its setup screen:
+
+| What you set | Value |
+|---|---|
+| Image (or repository) | `ghcr.io/kb1rma/lochinvar-native-modbus` |
+| Device | The boiler's serial device on the host, mapped to `/dev/ttyUSB0` in the container |
+| Environment variables | `MQTT_HOST`, `MQTT_USERNAME`, `MQTT_PASSWORD`, and any others from [Settings](#settings) |
+| Folder or volume | Not needed. Only add one if you use a config file or a password file (see below). |
+
+### Image tags
+
+Each release has its own tag, like `0.1.0`. The `0.1` tag always points to the newest `0.1.x` release.
+The `latest` tag always points to the newest release. Images are built for 64-bit PCs (amd64), 64-bit
+ARM (arm64) and 32-bit ARM (arm/v7). [CHANGELOG.md](CHANGELOG.md) lists the changes once the first
+release is out.
+
+### Serial port permissions
+
+The container does not run as root. It runs as a user in group 20. On Debian, Ubuntu and Raspberry Pi
+OS, group 20 (`dialout`) owns serial devices, so this just works. On other systems, check the group
+number of the device:
+
+```bash
+ls -lnL /dev/serial/by-id/
+```
+
+The fourth column is the group number. If it is not 20, add `--group-add <that number>` to the
+container. Many platforms call this "extra parameters".
 
 ## Settings
 
+Every setting is an environment variable. You only need the MQTT ones. The rest have good defaults.
+
 | Variable | Default | What it does |
 |---|---|---|
-| `SERIAL_PORT` | `/dev/ttyUSB0` | Serial device inside the container |
+| `SERIAL_PORT` | `/dev/ttyUSB0` | The serial device inside the container |
 | `MODBUS_SLAVE_ID` | `1` | The boiler's Modbus address |
-| `MQTT_HOST` | `localhost` | MQTT broker |
-| `MQTT_PORT` | `1883`, or `8883` with TLS | |
-| `MQTT_USERNAME`, `MQTT_PASSWORD` | none | |
-| `MQTT_TLS` | `false` | `true` to connect with TLS (system CA certificates unless `MQTT_CA_FILE` is set) |
-| `MQTT_CA_FILE` | none | PEM CA certificate(s) to verify the broker with, e.g. a self-signed broker's CA; mount it with `-v` |
-| `MQTT_CLIENT_ID` | `lochinvar-native-modbus` | |
-| `MQTT_TOPIC_PREFIX` | `lochinvar` | Base topic for state and availability |
-| `DISCOVERY_PREFIX` | `homeassistant` | Home Assistant's MQTT discovery prefix |
-| `DEVICE_ID` | `lochinvar` | Unique id of the device in Home Assistant; change it to run two bridges |
-| `DEVICE_NAME` | `Lochinvar Boiler` | Device name in Home Assistant |
-| `FAST_INTERVAL` | `5s` | Time between live readings (`5s`, or plain seconds like `5`) |
-| `SLOW_INTERVAL` | `5m` | Time between settings and counter reads |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`; `debug` logs every failed read |
+| `MODBUS_TIMEOUT` | `600ms` | How long to wait for each answer from the boiler. It tries 3 times. |
+| `MQTT_HOST` | `localhost` | Your MQTT broker |
+| `MQTT_PORT` | `1883`, or `8883` with TLS | The broker's port |
+| `MQTT_USERNAME`, `MQTT_PASSWORD` | none | Your broker login |
+| `MQTT_TLS` | `false` | Set to `true` to use an encrypted (TLS) connection |
+| `MQTT_CA_FILE` | none | A certificate file to trust, for a broker with its own certificate |
+| `MQTT_CLIENT_ID` | `lochinvar-native-modbus` | The name the bridge uses on the broker |
+| `MQTT_TOPIC_PREFIX` | `lochinvar` | The start of every topic (see [Topics](#topics)) |
+| `DISCOVERY_PREFIX` | `homeassistant` | Home Assistant's discovery prefix. Only change it if you changed it in Home Assistant. |
+| `DEVICE_ID` | `lochinvar` | The device's ID in Home Assistant. Give each bridge its own if you run two. |
+| `DEVICE_NAME` | `Lochinvar Boiler` | The device's name in Home Assistant |
+| `FAST_INTERVAL` | `5s` | How often to read live values. Use `5s`, or just `5` for seconds. |
+| `SLOW_INTERVAL` | `5m` | How often to read settings and counters |
+| `REOPEN_AFTER` | `3m` | How long the boiler can stay silent before the bridge reopens the port (see below) |
+| `REOPEN_MAX` | `30m` | The longest wait between reopens |
+| `LOG_LEVEL` | `info` | How much to log: `debug`, `info`, `warn` or `error`. `debug` logs every failed read. |
+| `CONFIG_FILE` | none | A file of settings (see below) |
 
-The same settings are command line options, which win over the environment; run the image with
-`--help` to list them.
+### Other ways to give settings
+
+You can also give any setting in these ways:
+
+- **From a file.** Add `_FILE` to the name and give a file path. For example,
+  `MQTT_PASSWORD_FILE=/run/secrets/mqtt_password` reads the password from that file. This works with
+  Docker secrets. If you set both, the plain variable wins.
+- **In a config file.** Put the file in a folder you mount into the container. Then set `CONFIG_FILE`
+  to its path. Write one setting per line, using the same names as the variables. Lines that start with
+  `#` are comments. A misspelled name stops the bridge with an error, so typos don't go unnoticed.
+
+  ```
+  # /config/lochinvar.env
+  MQTT_HOST=192.168.1.10
+  MQTT_USERNAME=lochinvar
+  MQTT_PASSWORD=secret
+  DEVICE_NAME="Basement Boiler"
+  ```
+
+- **On the command line.** Every setting is also an option, like `--mqtt-host`. Run the image with
+  `--help` to see them all.
+
+If you give the same setting twice, the command line wins first. The environment variable (or its
+`_FILE`) comes next, and the config file comes last. The bridge saves nothing to disk. It only needs a
+folder if you use a config file, a password file or a certificate.
 
 ## Topics
 
-| Topic | Payload |
+| Topic | What it holds |
 |---|---|
-| `lochinvar/status` | `online` / `offline` (MQTT last will). Drives "Controller Online". |
-| `lochinvar/link` | `online` / `offline`: whether the boiler answers. Drives "Boiler Link OK". |
-| `lochinvar/<component>/<entity>/state` | The reading, e.g. `lochinvar/sensor/outlet_temp/state` = `150.2`. `None` = no reading. |
-| `homeassistant/<component>/lochinvar/<entity>/config` | Discovery. Sent again whenever Home Assistant comes online. |
+| `lochinvar/status` | `online` or `offline`: whether the bridge is running. Shown as "Controller Online". |
+| `lochinvar/link` | `online` or `offline`: whether the boiler answers. Shown as "Boiler Link OK". |
+| `lochinvar/<component>/<entity>/state` | One reading, like `lochinvar/sensor/outlet_temp/state` = `150.2`. `None` means no reading. |
+| `homeassistant/<component>/lochinvar/<entity>/config` | Discovery messages. They are sent again each time Home Assistant starts. |
 
-Everything is retained.
+The broker keeps the last message on every topic (they are "retained").
 
 ## When the link drops
 
-This works like the ESP. The live readings and the values computed from them (Delta T, Flame Present)
-show as unavailable, "Boiler Link OK" turns off, and Boiler Status reads "Link lost". Settings and
-counters keep their last values. While the link is down, the bridge tries again every 30 seconds.
+This works like the ESPHome package. If the boiler stops answering:
 
-The ESP restarts itself after 3 minutes down. A container can't do that, so the bridge closes and reopens
-the serial port instead. Each reopen that doesn't help doubles the wait, up to 30 minutes, because on a Mac
-the FTDI driver stopped working after many open/close cycles. "Link Reconnects" counts reopens since the
-container started. Like the ESP, this only starts once the boiler has answered at least once. If the
-adapter disappears (cable unplugged), the bridge tries to open it again every 10 seconds.
+- the live readings show as unavailable, along with Delta T and Flame Present,
+- "Boiler Link OK" turns off,
+- Boiler Status reads "Link lost",
+- settings and counters keep their last values,
+- the bridge tries again every 30 seconds.
 
-A Modbus exception reply is not a dropped link: the boiler answered, so "Boiler Link OK" stays on and the
-port is never reopened for it. The live readings are cleared, Boiler Status reads "Unavailable", and the
-bridge tries again every 30 seconds.
+The ESP restarts itself after 3 minutes without the boiler. A container can't restart itself that
+way. Instead, the bridge closes the serial port and opens it again. If that doesn't help, it waits twice
+as long before the next try, up to 30 minutes. It goes slowly on purpose. On a Mac, the USB serial
+driver stopped working after too many tries. "Link Reconnects" counts these reopens. Like the ESP, the
+bridge only does this after the boiler has answered at least once. If the USB cable is unplugged, the
+bridge tries to open the port every 10 seconds.
 
-If only unplugging and replugging the USB cable brings the link back, that is what happened on the Mac too.
-See "Known problems" in the main README.
+Sometimes the boiler answers with an error code (a Modbus exception) instead of the readings. That
+still counts as an answer, so "Boiler Link OK" stays on and the port is not reopened. The live readings
+are cleared, Boiler Status reads "Unavailable", and the bridge tries again every 30 seconds.
+
+Sometimes only unplugging and replugging the USB cable brings the link back. That happened on the Mac
+too. See "Known problems" in the main README.
 
 ## Differences from the ESPHome package
 
-- "Link Watchdog Restarts" is "Link Reconnects" here (see above).
-- "Controller Online" turns off when the container stops or loses the broker, from its MQTT last will.
+- "Link Watchdog Restarts" is called "Link Reconnects" here (see above).
+- "Controller Online" turns off when the container stops or loses the broker. It uses the MQTT "last
+  will" message for this.
 - Home Assistant shows the container as its own device, separate from an ESP.
 
 ## Developing
 
-The bridge is Go (see `go.mod` for the version), using
+The bridge is written in Go (see `go.mod` for the version). It uses
 [go.bug.st/serial](https://github.com/bugst/go-serial) and
 [paho.mqtt.golang](https://github.com/eclipse/paho.mqtt.golang).
 
 | Path | What it is |
 |---|---|
-| `cmd/lochinvar-mqtt/` | `main`: configuration, signals, the main loop |
-| `internal/modbus/` | Function 03 reads over the serial port. The only code that writes to it. |
-| `internal/decode/` | Raw registers to readings: temperatures, status text, Delta T, the ignition guard |
-| `internal/entities/` | The entity list, matching `esphome/packages/boiler.yaml` |
-| `internal/discovery/` | Topics and Home Assistant discovery payloads |
-| `internal/bridge/` | The poll loop, link loss and reopening |
-| `internal/mqttout/` | The MQTT connection, last will, and republish signals |
-| `internal/config/` | Flags and environment variables |
+| `cmd/lochinvar-mqtt/` | The program's start: settings, signals and the main loop |
+| `internal/modbus/` | Function 03 reads over the serial port. This is the only code that writes to the port. |
+| `internal/decode/` | Turns raw values into readings: temperatures, status text, Delta T, the ignition check |
+| `internal/entities/` | The list of sensors, matching `esphome/packages/boiler.yaml` |
+| `internal/discovery/` | Topics and Home Assistant discovery messages |
+| `internal/bridge/` | The read loop, link loss and reopening the port |
+| `internal/mqttout/` | The MQTT connection, the last will, and when to send everything again |
+| `internal/config/` | Command line options, environment variables and the config file |
 | `internal/modbustest/` | A fake boiler for the tests |
 
 From `mqtt/`:
@@ -146,13 +209,13 @@ golangci-lint run
 docker build -t lochinvar-mqtt .
 ```
 
-The tests use a fake serial port and an in-process MQTT broker, so they never talk to a boiler. They also
+The tests use a fake serial port and a test MQTT broker, so they never talk to a real boiler. They also
 check that:
 
-- every frame sent is a function 03 read, and only `internal/modbus` writes to the port;
-- the entities match `esphome/packages/boiler.yaml` (names, addresses, units, decoding);
-- every address is in `registers/controller.yaml`;
+- every message sent is a function 03 read, and only `internal/modbus` writes to the port,
+- the sensors match `esphome/packages/boiler.yaml` (names, addresses, units and decoding),
+- every address is in `registers/controller.yaml`,
 - the version matches `.release-please-manifest.json`.
 
-CI also checks that `go.mod` is tidy, runs `go vet`, golangci-lint (`.golangci.yml`), a short fuzz run and
-govulncheck, and builds the image for every platform.
+CI also checks that `go.mod` is tidy. It runs `go vet`, golangci-lint (`.golangci.yml`), a short fuzz
+test and govulncheck, and it builds the image for every platform.
