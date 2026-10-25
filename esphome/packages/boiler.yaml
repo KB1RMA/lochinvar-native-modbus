@@ -15,7 +15,7 @@
 esphome:
   project:
     name: kb1rma.lochinvar-native-modbus
-    version: "0.0.0" # x-release-please-version
+    version: "0.1.0" # x-release-please-version
 
 globals:
   # millis() when Status Code last read 6 (prepurge) or 7 (ignition); 0 = not yet. See Failed Ignitions.

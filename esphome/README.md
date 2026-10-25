@@ -48,8 +48,8 @@ mqtt:
   broker: !secret mqtt_broker
 
 packages:
-  transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.0.0 # x-release-please-version
-  boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.0.0 # x-release-please-version
+  transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.0 # x-release-please-version
+  boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.0 # x-release-please-version
 ```
 
 The `@esphome-v...` at the end pins a release, so your boiler setup won't change by surprise. The
