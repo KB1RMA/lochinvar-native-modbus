@@ -50,7 +50,6 @@ root README) release neither.
   marked `x-release-please-version`. Each component's marked lines live only in its own folder, because the
   generic updater writes one version into every marked line of a file. PR titles must be Conventional Commits
   (they are squash-merged).
-- Remove `release-as` from both packages in `release-please-config.json` after the first (0.1.0) releases.
 
 ## Link facts
 
