@@ -62,8 +62,8 @@ The link settings are 19200 baud, 8N1, device ID 1. Both bridges set these for y
 
 ## What you need
 
-- A Lochinvar boiler with a USB port on its controller. We tested firmware
-  "SIT 547_00 May 15 2018". Other models may work, but we have not tried them yet.
+- A Lochinvar boiler with a SMART SYSTEM control that has a **USB "PC Connection" port** next to its
+  display. See [Which boilers this works on](#which-boilers-this-works-on).
 - A regular USB cable.
 - Either an ESP32-S3 board (see [esphome/README.md](esphome/README.md)) or a computer that runs
   Docker (see [mqtt/README.md](mqtt/README.md)).
@@ -153,10 +153,35 @@ project does **not** use that board. The controller's built-in port uses differe
 stores temperatures in a different way. If you have a MODB-I-O board, see
 [cwm12345/lochinvar-modbus](https://github.com/cwm12345/lochinvar-modbus).
 
-## Tested hardware
+## Which boilers this works on
 
-| Controller firmware | Boiler model |
+This bridge talks to the port that Lochinvar's own Windows program for the SMART SYSTEM control
+(called "WinPro" or "SMART SYSTEM 938") uses. Whether your boiler works depends on which control and display
+it has. The model year alone doesn't tell you, because a control can be replaced with a newer one.
+
+| Your boiler | Will it work? |
 |---|---|
-| SIT 547_00 May 15 2018 | TODO |
+| **Knight Fire Tube** (floor KHB and wall WHB, models 55-285, Series 100-101, 110-111 and 120-121) with a large screen, a turning dial, and a USB "PC Connection" port | **Tested.** Firmware "SIT 547_00 May 15 2018 938FT". The Lochinvar manuals for these models match what we see |
+| Other boilers with the same large-screen SMART SYSTEM display and USB "PC Connection" port: Knight floor fire tube (KHN), Knight Wall Hung fire tube (WHN), Knight XL, Armor | **Not tested.** WinPro covers all of them, so the port is probably the same. Some registers may sit at other addresses, or be missing on models without that feature. Try it, compare with the display, and tell us |
+| Older Knight boilers (about 2005-2012: KBN, KBL, Knight Wall Mount WBN, early Knight XL) with a **2-line text display** and a **phone-style RJ11 jack** for the PC | **Not supported.** Their PC port is a serial jack (Lochinvar's kit used a USB adapter cable for it), not the built-in USB port. Its protocol and registers are unknown. Don't plug a phone line into it |
+| Any boiler with Lochinvar's MODB-I-O board, or the optional ModBus/BACnet interface module on the low-voltage board | **Different project.** Those boards have their own documented RS-485 registers. See [Not the MODB-I-O board](#not-the-modb-i-o-board) |
+| Crest and other boilers with the SMART TOUCH touchscreen control | **Not supported.** A different control |
 
-Got it working on a different boiler? Please open an issue so we can add it to this table.
+**How to check yours:**
+
+1. Look at the display. You want a large screen with a dial in the middle, two soft keys, and a USB port
+   labeled **PC Connection** (separate from the full-size USB port for a memory stick). A 2-line text display
+   with an RJ11 jack is the older control.
+2. Read the software version in the installer menu (Software Version, read only). The logger below also
+   saves it, in registers 30-44. Ours ends in **938FT**: 938 is the SMART SYSTEM platform, and FT means Fire Tube.
+3. When the bridge starts, the readings should match the display: outlet and inlet temperature, flame current,
+   fan speed, and the History screen counters. If they don't, please open an issue.
+
+### Tested boilers
+
+| Boiler (from the rating plate) | Controller firmware | Bridge | Notes |
+|---|---|---|---|
+| Knight Fire Tube KHB155N (155,000 BTU/hr, natural gas), Series 100, built 2023 | SIT 547_00 May 15 2018 938FT | ESPHome and the container | the boiler that this map comes from |
+
+Got it working on a different boiler? Please open an issue with the model and series from the rating plate,
+the firmware string, and whether the temperatures matched the display. We'll add it here.

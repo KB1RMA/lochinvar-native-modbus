@@ -15,8 +15,11 @@
 
 source: controller-native
 device:
+  controller: SMART SYSTEM                         # Lochinvar's name for this control; see docs/manual-cross-reference.md
   controller_firmware: "SIT 547_00 May 15 2018"   # decoded from registers 30-44; full string ends "938FT"
-  tested_models: []                                # TODO: add boiler model
+  platform: "938"                                  # Lochinvar's PC program for this control is "SMART SYSTEM 938"; FT = Fire Tube
+  port: display "PC Connection" USB port           # the port Lochinvar's WinPro PC program uses
+  tested_models: [KHB155N Series 100]              # Knight Fire Tube floor boiler, 155,000 BTU/hr, built 2023 (serial prefix 2332)
 
 link:
   protocol: modbus-rtu
@@ -27,7 +30,7 @@ link:
   slave_id: 1
   read_function: 3          # holding registers; function 4 returns exception 1
   max_block: 50             # 50 register reads work; blocks touching unmapped addresses return exception 2
-  electrical_level: unknown # TODO: RS-232 / RS-485 / TTL; an FTDI FT232R adapter worked
+  electrical_level: usb     # FTDI FT232R inside the controller; older SMART SYSTEM displays had an RJ11 serial jack instead (untested)
 
 # How raw 16-bit values become engineering units.
 encodings:
@@ -49,13 +52,25 @@ encodings:
     formula: "raw if raw < 32768 else raw - 65536"
   ascii_swapped:
     description: ASCII text, two characters per register, characters swapped within each register.
+  temp_delta_f:
+    description: Temperature difference (hysteresis, offset, differential) in degrees F, no flag bit.
+    formula: "raw / 25"
+    unit: degF
+    note: "250 = 10 F, 625 = 25 F, 1500 = 60 F; every value matched a manual default or WinPro screenshot"
+  tenths_s:
+    description: Time in 0.1 s. WinPro shows these as min'sec" with a maximum of 54'37" (32767).
+    formula: "raw / 10"
+    unit: s
+  centivolts:
+    formula: "raw / 100"
+    unit: V
 
 live:
   - {name: outlet_temp,    address: 62,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [154]}
-  - {name: outlet_temp_2,  address: 64,   encoding: temp_f, confidence: likely, note: "second outlet thermistor (dual sensor, likely high limit); within 0.7 F of r62"}
+  - {name: outlet_temp_2,  address: 64,   encoding: temp_f, confidence: likely, note: "second outlet thermistor; within 0.7 F of r62. The service manual calls the pair S1a/S1b (two thermistors in one housing, the outlet / high limit sensor) and WinPro shows Outlet 1 and Outlet 2; the Outlet Temp Diff fault trips when they disagree"}
   - {name: inlet_temp,     address: 73,   encoding: temp_f, confidence: likely, accuracy_f: 3, mirrors: [155], note: "outlet - inlet matched display delta T allowing for lag; HA return pipe probe tracks it (sd about 1 F, reads 7 F low)"}
   - {name: exhaust_temp,   address: 63,   encoding: temp_f, confidence: likely, accuracy_f: 3, note: "falls fast as firing rate drops; reads 15-25 F below inlet at low fire, recheck against display"}
-  - {name: exhaust_temp_2, address: 65,   encoding: temp_f, confidence: likely, note: "second flue thermistor; within 0.9 F of r63"}
+  - {name: exhaust_temp_2, address: 65,   encoding: temp_f, confidence: likely, note: "second flue thermistor; within 0.9 F of r63. Service manual S3a/S3b; WinPro shows Flue 2 as check / limit"}
   - {name: exhaust_temp_max, address: 156, encoding: temp_f, confidence: guess, note: "equals max(r63, r65) in 92 percent of samples"}
   - {name: outdoor_temp,   address: 75,   encoding: temp_f, confidence: confirmed, mirrors: [158]}
   - {name: tank_temp,      address: 157,  encoding: temp_f, confidence: guess, note: "always 0x8000 (no sensor; DHW is a zone here). Placed by order only: the 154-159 mirror block runs outlet, inlet, flue, ?, outdoor, ?, and the MODB-I-O sensor table runs tank, outdoor, system supply"}
@@ -66,7 +81,7 @@ live:
   - {name: fan_speed_target, address: 89, encoding: u16, unit: rpm, confidence: likely, mirrors: [106, 149], note: "= 1700 + (r80/100 - 10) * 6500/90 within 50 rpm"}
   - {name: fan_speed_command, address: 107, encoding: u16, unit: rpm, confidence: likely, note: "same curve from r131; about 1 s ahead of r89; clamped to min fan 1700 at idle"}
   - {name: fan_drive,      address: 104,  encoding: u16, confidence: guess, note: "maybe fan PWM in 0.1 %: about 145 in prepurge, 604 at 85 % fire. Corr 0.98-0.998 with r110 and r80 while running, but the ratio to rpm is not constant. Redundant with fan_speed; do not publish"}
-  - {name: fan_ramp_limit, address: 111,  encoding: u16, confidence: guess, note: "exactly 50 while running (r84 = 9), 250 in every other state, both sessions; r112 is always -r111 (signed16). Constant per state; do not publish"}
+  - {name: fan_ramp_limit, address: 111,  encoding: u16, confidence: likely, note: "exactly 50 while running (r84 = 9), 250 in every other state, both sessions; r112 is always -r111 (signed16). These are parameters 1099-1102 (WinPro INCFAN/DECFAN 250, INCFAN_R/DECFAN_R 50 in run position). Constant per state; do not publish"}
   - {name: fan_tach_period, address: 108, encoding: u16, confidence: likely, note: "r108 * r110 = 3.75e6; inverse of fan speed, stale value at idle; do not publish"}
   - {name: firing_rate,    address: 80,   encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "8516 when display read 85 percent; display lags by roughly 10 s; 10 percent = min fan, 100 percent = max fan"}
   - {name: firing_rate_requested, address: 131, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "always a multiple of 10; about 1 s ahead of r80"}
@@ -74,10 +89,10 @@ live:
   - {name: setpoint_sh2_target, address: 143, encoding: temp_f, confidence: likely, note: "equals SH2 setpoint 125"}
   - {name: setpoint_sh3_target, address: 144, encoding: temp_f, confidence: guess, note: "equals SH3 setpoint 125; SH2/SH3 split unverified while both are 125"}
   - {name: setpoint_dhw_target, address: 145, encoding: temp_f, confidence: likely}
-  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2. Backtest: 32.0 F if and only if r118 = 0 in every sample of both sessions, so 32.0 F means no setpoint (the MODB-I-O outlet setpoint uses the same convention); publish none, not 32. r147 equalled r146 in 100 percent of samples; it may be the system setpoint (equal with no system sensor), untested"}
+  - {name: active_target_temp, address: 146, encoding: temp_f, confidence: likely, mirrors: [147], note: "tracks r142 during the SH call; exactly 32.0 F (raw 43036) when there is no demand; dropped to 32 at the 10:02:17 shutdown; 161.2 F at 48 F outdoor in session 2. Backtest: 32.0 F if and only if r118 = 0 in every sample of both sessions, so 32.0 F means no setpoint (the MODB-I-O outlet setpoint uses the same convention); publish none, not 32. This is WinPro's dSP ('highest controlling set point that is active'), which its manual screenshot shows as 32 with no call for heat. r147 equalled r146 in 100 percent of samples; it may be the system setpoint (equal with no system sensor), untested"}
 
 status:
-  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 6: prepurge, 7: ignition, 9: running, 10: post-purge}, note: "4 also during anti-cycle, clocked and set point met. 7 seen for 5-10 s between prepurge and running in both ESP32 cycles of session 4, starting with the flame signal; lockout codes not seen yet. If a lockout shows here, compare with the MODB-I-O lockout table (161-240, e.g. 233 no flame after ignition) in cwm12345/lochinvar-modbus enums.py; unverified on this controller"}
+  - {name: status_code,    address: 84,   encoding: u16, confidence: likely, codes: {4: standby, 6: prepurge, 7: ignition, 9: running, 10: post-purge}, note: "4 also during anti-cycle, clocked and set point met. 7 seen for 5-10 s between prepurge and running in both ESP32 cycles of session 4, starting with the flame signal; lockout codes not seen yet. If a lockout shows here, compare with the MODB-I-O lockout table (161-240, e.g. 233 no flame after ignition) in cwm12345/lochinvar-modbus enums.py; unverified on this controller. The display status list also has START (safety check before prepurge; maybe 5), SHUTDOWN and BLOCKED; the control locks out after 4 failed ignition tries"}
   - {name: phase_timer,    address: 85,   encoding: u16, unit: s, scale: 0.1, confidence: likely, note: "counts down; prepurge 17.7 s, post-purge 11.3-11.5 s"}
   - {name: minute_timer,   address: 87,   encoding: u16, unit: min, confidence: unknown, note: "1440 at standby, down 1 every ~61 s while firing, reset at standby"}
   - {name: heat_demand,    address: 118,  encoding: u16, confidence: likely, note: "1 during a call for heat (any zone)"}
@@ -90,7 +105,7 @@ status:
   - {name: gas_valve,      address: 115,  encoding: u16, confidence: guess, note: "1 at ignition with the first flame signal, 0 one second after flame-out"}
   - {name: burner_running, address: [127, 130], encoding: u16, confidence: likely, note: "1 exactly when r84 = 9 (100 percent of samples, both sessions); off at flame-out. Not a separate flame input: flame signal r66 rose at 11:31:44 in prepurge with r127 still 0. Adds nothing beyond r84; use r66 for flame"}
   - {name: burner_flags,   address: [116, 90], encoding: u16, confidence: guess, note: "1 while running; 116 off 9 s after flame-out, 90 at post-purge end"}
-  - {name: safety_inputs,  address: [121, 122, 123, 124, 125], encoding: u16, confidence: guess, note: "1 in every sample, through prepurge and the blower; r120 and r126 always 0. The pattern matches the MODB-I-O idle input word 62 (flow, gas pressure, louver proving, air pressure, blocked drain on; auto-reset high limit off), which would make r121-r125 those five switches in that order and r126 the high limit. Untested: nothing ever changed. A tripped switch or lockout would settle it"}
+  - {name: safety_inputs,  address: [121, 122, 123, 124, 125], encoding: u16, confidence: guess, note: "1 in every sample, through prepurge and the blower; r120 and r126 always 0. The pattern matches the MODB-I-O idle input word 62 (flow, gas pressure, louver proving, air pressure, blocked drain on; auto-reset high limit off), which would make r121-r125 those five switches in that order and r126 the high limit. Untested: nothing ever changed. A tripped switch or lockout would settle it. WinPro lists the inputs as louver, flow/LWCO, gas pressure, air switch, drain switch, so that order is just as likely"}
   - {name: relay_load_analog, address: 67, encoding: u16, confidence: unknown, note: "1512 whenever the pump is on (100 percent of 1512 samples), 1509 with it off; flickers between them from the second r135 drops until the pump stops. An analog reading nudged by relay load; meaning unknown, do not publish"}
   - {name: anti_cycle,     address: 137,  encoding: u16, confidence: likely, note: "1 from flame-out until the off-delay ends; cleared with the display leaving anti-cycle"}
   - {name: boiler_pump_output, address: 132, encoding: u16, unit: percent, scale: 0.01, confidence: likely, note: "commanded. 100 % from the start of demand until about 60 s after flame-out (post-pump), then 0. Display 'BLR Pump Out' read 99-100 % while this read 10000"}
@@ -104,7 +119,7 @@ counters:
   - {name: ignition_attempts, address: 1304, words: 2, encoding: u32,              confidence: confirmed}
   - {name: ignitions,         address: 1306, words: 2, encoding: u32,              confidence: confirmed}
   - {name: sh_run_time,       address: 1308, words: 2, encoding: u32, unit: h,     confidence: confirmed}
-  - {name: counter_1310,      address: 1310, words: 2, encoding: u32,              confidence: unknown, note: "value 2055 at 10:15; not DHW run time (display 0)"}
+  - {name: sh_run_time_low_fire, address: 1310, words: 2, encoding: u32, unit: h, confidence: guess, note: "2055 at 10:15 against 3828 SH hours; not DHW run time (display 0). WinPro's fault log has power hours, SH hours, SH hours <50 %, DHW hours in that order, and this is the only one that fits"}
   - {name: sh_cycles,         address: 1312, words: 2, encoding: u32,              confidence: confirmed}
   - {name: dhw_cycles,        address: 1314, words: 2, encoding: u32,              confidence: guess, note: "0 and DHW cycles on display was 0; ignitions - SH cycles = 8 is unexplained"}
 
@@ -120,16 +135,58 @@ settings:
   - {name: fan_speed_min_live, address: 114, encoding: u16, unit: rpm, confidence: likely, note: "live copy of 1097"}
   - {name: fan_speed_max_live, address: 113, encoding: u16, unit: rpm, confidence: likely, note: "live copy of 1098"}
   - {name: fan_curve_points, address: [1147, 1148, 1149], encoding: u16, unit: rpm, confidence: guess, note: "3500/5300/6750 between min and max at 1146/1150; not all equal, list is a group, not copies"}
-  - {name: post_purge_fan_speed, address: [1109, 1110], encoding: u16, unit: rpm, confidence: likely, note: "2900; fan held 2900 rpm during post-purge"}
+  - {name: fan_speed_purge,  address: 1109, encoding: u16, unit: rpm, confidence: likely, note: "2900; fan held 2900 rpm in prepurge and post-purge. WinPro FANHIGH, by table order"}
+  - {name: fan_speed_ignition, address: 1110, encoding: u16, unit: rpm, confidence: guess, note: "2900. WinPro FANIGN, next after FANHIGH; the two are equal here, so order is the only evidence"}
+  # From here on: matched against the service manual and the WinPro parameter tables (docs/manual-cross-reference.md).
+  # Factory limits (WinPro "Table 4 - Lochinvar", same order as 1070-1121).
+  - {name: high_limit_auto_reset_hysteresis, address: 1070, encoding: temp_delta_f, confidence: likely, note: "10 F; WinPro S1AUTOLIMHYS; service manual: restarts 10 F below the auto reset limit"}
+  - {name: high_limit_auto_reset_dwh, address: 1071, encoding: temp_f, confidence: guess, note: "200 F; WinPro S1AUTOHILIMDWH (direct water heater use)"}
+  - {name: outlet_shutdown_temp,     address: 1072, encoding: temp_f, confidence: likely, note: "195 F; WinPro CS1BLO; service manual: shuts down above 195 F"}
+  - {name: outlet_shutdown_hysteresis, address: 1073, encoding: temp_delta_f, confidence: guess, note: "10 F; WinPro CS1HYS"}
+  - {name: outlet_fan_limit_min,     address: 1074, encoding: temp_f, confidence: guess, note: "195 F; WinPro FANMINS1C, min fan at this outlet temperature"}
+  - {name: outlet_fan_limit_start,   address: 1075, encoding: temp_f, confidence: likely, note: "185 F; WinPro FANMAXS1C; service manual: reduces fan above 185 F"}
+  - {name: flue_shutdown_temp,       address: 1076, encoding: temp_f, confidence: likely, note: "225 F; WinPro CS3BLO; service manual: shuts down above 225 F"}
+  - {name: flue_shutdown_hysteresis, address: 1077, encoding: temp_delta_f, confidence: likely, note: "25 F; WinPro CS3HYS; service manual: restarts after a 25 F drop"}
+  - {name: flue_fan_limit_min,       address: 1078, encoding: temp_f, confidence: guess, note: "225 F; WinPro FANMINS3C"}
+  - {name: flue_fan_limit_start,     address: 1079, encoding: temp_f, confidence: likely, note: "215 F; WinPro FANMAXS3C; service manual: reduces fan above 215 F"}
+  - {name: delta_t_shutdown,         address: 1080, encoding: temp_delta_f, confidence: likely, note: "60 F; WinPro DS1S2BLO; service manual: shuts down above 60 F rise"}
+  - {name: delta_t_shutdown_hysteresis, address: 1081, encoding: temp_delta_f, confidence: guess, note: "10 F; WinPro DS1S2HYS"}
+  - {name: delta_t_fan_limit_min,    address: 1082, encoding: temp_delta_f, confidence: guess, note: "60 F; WinPro FANMINS12C"}
+  - {name: delta_t_fan_limit_start,  address: 1083, encoding: temp_delta_f, confidence: likely, note: "55 F; WinPro FANMAXS12C; service manual: reduces fan above 55 F rise"}
+  - {name: fan_step_limits,          address: [1099, 1100, 1101, 1102], encoding: u16, confidence: likely, note: "250, 250, 50, 50; WinPro INCFAN, DECFAN, INCFAN_R, DECFAN_R (max fan change, then the same while running). r111 shows the active one"}
+  # Installer settings.
+  - {name: outdoor_reset_sh1,        address: [1163, 1164, 1165, 1166, 1167], encoding: temp_f, confidence: likely, note: "35 F -> 180 F, 70 F -> 130 F, outdoor shutdown 100 F (cold outdoor, set point there, warm outdoor, set point there, shutdown). The line predicts r142: 167.7 F at 43.6 F outdoor (logged 167.7), 161.4 F at 48 F (logged 161.2). A group, not copies"}
+  - {name: outdoor_reset_sh1_shutdown_diff, address: 1168, encoding: temp_delta_f, confidence: guess, note: "10 F; manual default"}
+  - {name: outdoor_reset_sh2,        address: [1169, 1170, 1171, 1172, 1173], encoding: temp_f, confidence: guess, note: "25, 180, 70, 70, 70 F: the factory defaults, same layout as SH1"}
+  - {name: outdoor_reset_sh2_shutdown_diff, address: 1174, encoding: temp_delta_f, confidence: guess}
+  - {name: outdoor_reset_sh3,        address: [1175, 1176, 1177, 1178, 1179], encoding: temp_f, confidence: guess, note: "factory defaults, same layout as SH1"}
+  - {name: outdoor_reset_sh3_shutdown_diff, address: 1180, encoding: temp_delta_f, confidence: guess}
+  - {name: setpoint_limits,          address: [1187, 1188, 1189, 1190], encoding: temp_f, confidence: guess, note: "60, 140, 60, 185 F: tank min, tank max, SH min, SH max (manual defaults); order from value only"}
+  - {name: sh_offsets_differentials, address: [1191, 1192, 1193, 1194, 1195, 1196], encoding: temp_delta_f, confidence: guess, note: "10, 20 x3: SH1-SH3 offset and differential (manual defaults)"}
+  - {name: dhw_boiler_offset_differential, address: [1201, 1202], encoding: temp_delta_f, confidence: guess, note: "10, 20 F (manual defaults)"}
+  - {name: night_setback_offsets,    address: [1221, 1222], encoding: temp_delta_f, confidence: guess, note: "0, 0: SH and DHW night setback off. They sit right before the triggers, as in WinPro"}
+  - {name: night_setback_triggers,   address: [1223, 1224, 1225, 1226, 1227, 1228, 1229, 1230, 1231, 1232, 1233, 1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249, 1250], encoding: u16, unit: min, confidence: likely, note: "minutes of the week from Sunday 00:00. WinPro lists 28 triggers: SH on 1-7, SH off 1-7, DHW on 1-7, DHW off 1-7. Here every on is 20:00 and every off is 06:00, daily; inactive while the offsets are 0"}
+  - {name: freeze_protection,        address: [1253, 1254], encoding: temp_f, confidence: likely, note: "45 F pumps on, 37 F burner on (manual defaults and the protection text)"}
+  - {name: freeze_protection_burner_diff, address: 1255, encoding: temp_delta_f, confidence: likely, note: "5 F (manual default)"}
+  - {name: boiler_pump_delay,        address: 1256, encoding: tenths_s, confidence: likely, note: "60 s; r132 stays on about 60 s after flame-out in every logged cycle"}
+  - {name: dhw_system_pump_delay,    address: [1257, 1258], encoding: tenths_s, confidence: guess, note: "60 s, 30 s: DHW and system pump delay (manual defaults 1 min, 30 s)"}
+  - {name: pump_anti_seize,          address: [1259, 1260, 1261], encoding: tenths_s, confidence: guess, note: "20 s each (manual default)"}
+  - {name: bms_voltages,             address: [1263, 1264, 1265, 1266, 1267], encoding: centivolts, confidence: guess, note: "3.00, 2.00, 10.00, 2.00, 1.00 V: boiler pump min volts, BMS volts at min / max, on volts, off differential (manual defaults)"}
+  - {name: bms_rates,                address: [1268, 1269], encoding: u16, unit: percent, scale: 0.1, confidence: guess, note: "20 %, 100 %: BMS rate at min / max volts"}
+  - {name: bms_setpoints,            address: [1270, 1271], encoding: temp_f, confidence: guess, note: "70, 180 F: BMS set point at min / max volts (manual defaults)"}
+  - {name: service_notification,     address: [1154, 1155, 1156], encoding: u16, confidence: guess, note: "13 months, 8760 h, 5000 (cycles / 10?): manual defaults 13 months, 8760 h, 50,000 cycles"}
 
 info:
   - {name: firmware_string, address: 30, words: 15, encoding: ascii_swapped, confidence: confirmed, note: "SIT 547_00 May 15 2018 938FT"}
 
 unmapped_regions:
-  - {range: [1006, 1295], note: "Parameter block; mostly unlabeled. Includes temp_f values, percent values, fan RPMs (1094-1150), timers and what looks like a weekly schedule at 1223-1250 (steps of 1440, minutes)."}
+  - {range: [1006, 1295], note: "Parameter block; partly labeled from the WinPro parameter tables (docs/manual-cross-reference.md). 1068-1121 follow WinPro's 'Table 4 - Lochinvar' in order (also gradient limiting 1088-1096, fan PID 1103-1105, flame current support 1106-1108, pump timers 1111-1113, DHW PID 1115-1117). 1272-1283 look like the ramp delay steps."}
+  - {range: [1144, 1144], note: "5309, the installer menu password printed in the service manual. Never publish it."}
+  - {range: [1316, 1384], note: "1316-1332 all 0 and 1335-1365 all 0xFFFF: probably the per-fault counters and an empty last-10-lockouts table from WinPro's fault log. Capture this block before and after a lockout."}
+  - {range: [150, 150], note: "Candidate for WinPro's Derivative Outlet or Derivative Flue (rate of change shown on its status screen)."}
   - {range: [72, 72], note: "Not a counter: read 3828 (= SH run hours) in the idle scan by coincidence, wanders 3553-3887 in the log."}
   - {range: [150, 151], note: "r150 signed, about +/-7, maybe a rate of change; r151 rises in steps while firing."}
-  - {range: [172, 176], note: "Controller clock (20, 5, 18, hour, minute). Runs, but about 54 min slow and the date is wrong; do not use as a timestamp."}
+  - {range: [172, 176], note: "Controller clock (20, 5, 18, hour, minute). Runs, but about 54 min slow and the date is wrong; do not use as a timestamp. The manual says it must be set after the power has been off over 4 h and never adjusts for DST; WinPro sets it on connect (a write, so we don't)."}
   - {range: [500, 502], note: "Small values 6, 11, 2"}
   - {range: [68, 77], note: "r68, r70, r77 always 0x8000 (no sensor): likely the live copies of the tank, system supply and DHW recirculation sensors (see tank_temp). r69 = 503, r71 = 0"}
   - {range: [76, 78], note: "r76 and r78 are 0 except one-second blips (10-63, steps of about 10.5); r76 = r160 + 21 when both blip. Probably read skew; do not publish"}
