@@ -12,7 +12,9 @@ run-name: Release Please
 #
 # On every push to main, release-please keeps one release pull request open per component with the
 # next version and changelog, worked out from Conventional Commit messages. Merging it tags the commit
-# and publishes a GitHub release.
+# and publishes a GitHub release. `always-update` makes it rebuild both release branches from main on
+# every run. Without it, it only touches a pull request whose notes changed, so when one component's
+# release merged, the other's pull request kept a conflict on the manifest's neighbouring line.
 #
 # - ESPHome: the tag is the release. ESPHome fetches packages straight from it
 #   (github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-vX.Y.Z), so there is
