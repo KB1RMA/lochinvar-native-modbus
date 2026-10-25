@@ -10,7 +10,6 @@
       "release-type": "simple",
       "component": "esphome",
       "package-name": "lochinvar-native-modbus-esphome",
-      "release-as": "0.1.0",
       "changelog-path": "CHANGELOG.md",
       "exclude-paths": ["esphome/tests"],
       "extra-files": ["packages/boiler.yaml", "README.md"]
@@ -19,7 +18,6 @@
       "release-type": "simple",
       "component": "mqtt",
       "package-name": "lochinvar-native-modbus-mqtt",
-      "release-as": "0.1.0",
       "changelog-path": "CHANGELOG.md",
       "extra-files": ["internal/version/version.go", "README.md"]
     }
