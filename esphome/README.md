@@ -13,6 +13,7 @@ Boiler controller  --USB cable-->  ESP32-S3  --Wi-Fi-->  MQTT broker  -->  Home 
 
 - A Lochinvar boiler with a USB port on its controller (see "Tested hardware" in the main README).
 - An **ESP32-S3** board with a USB port that can act as a host. We used an ESP32-S3-DevKitC-1 clone.
+- A soldering iron and a little solder, to bridge one pad on the board (see below).
 - A regular USB cable to connect the boiler to the ESP32-S3.
 - Home Assistant with an MQTT broker (such as the Mosquitto add-on). ESPHome's own API also works.
 
@@ -20,57 +21,117 @@ Boiler controller  --USB cable-->  ESP32-S3  --Wi-Fi-->  MQTT broker  -->  Home 
 
 1. Plug the boiler's USB cable into the ESP32-S3's **USB** port (sometimes labeled "OTG").
 2. Power the board through its other port (labeled **COM** or **UART**).
-3. Bridge the **USB-OTG** solder pad on the board. This lets the USB port send 5 volts to the
-   boiler's chip. If you skip this, the boiler never shows up, and the log says
-   "Channel not initialised".
+3. Bridge the **USB-OTG** solder pad on the board. Put a small blob of solder across its two halves.
+   This lets the USB port send 5 volts to the boiler's chip.
+
+> [!IMPORTANT]
+> The USB-OTG pad must be bridged. The boiler's USB chip gets its power from the ESP32's USB port.
+> Out of the box, that port sends no power. Powering the board through COM does not fix this. If
+> you skip this step, the boiler never shows up, and the log says "Channel not initialised".
 
 The link settings are 19200 baud, 8N1, device ID 1. The package sets these for you.
 
 ## Setting it up
 
-The bridge is an [ESPHome](https://esphome.io) package. You write a short config for your own
-board, and it pulls in this project from GitHub. Here is a full example:
+The bridge is an [ESPHome](https://esphome.io) package. Your own config stays short. It has your
+board's name, your Wi-Fi, and how it talks to Home Assistant. Then two lines pull in the boiler part
+from GitHub. You never copy the sensors into your own file.
+
+### Quick start with ESPHome Device Builder
+
+1. Wire the board as described above. Don't forget to bridge the **USB-OTG** pad.
+2. Open ESPHome Device Builder. This is the ESPHome add-on or dashboard. Click **New device**.
+   Name it something like `boiler` and pick **ESP32-S3**. Device Builder fills in the board, Wi-Fi,
+   API and OTA parts for you.
+3. Click **Edit** and add these lines at the end of the file:
+
+   ```yaml
+   packages:
+     transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.0 # x-release-please-version
+     boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.0 # x-release-please-version
+   ```
+
+4. Make sure the `esp32:` block uses the ESP-IDF framework (`type: esp-idf`). The USB host needs it.
+5. Click **Install**. The first time, plug the board's **COM** port into your computer and choose
+   "Plug into this computer". After that, updates go over Wi-Fi.
+6. In Home Assistant, go to **Settings > Devices & services**. The new device shows up there.
+   Click **Configure** to add it. If it asks for a key, copy the `key:` line from the device's
+   config.
+
+### Full example (Home Assistant API)
+
+This is the whole config. Everything below `packages:` comes from this project.
 
 ```yaml
 esphome:
-  name: lochinvar
+  name: boiler
+  friendly_name: Boiler
 
 esp32:
-  board: esp32-s3-devkitc-1
+  variant: esp32s3
   framework:
-    type: esp-idf
+    type: esp-idf          # required for the USB host
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-
-mqtt:
-  broker: !secret mqtt_broker
 
 packages:
   transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.0 # x-release-please-version
   boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.0 # x-release-please-version
 ```
 
-The `@esphome-v...` at the end pins a release, so your boiler setup won't change by surprise. The
-package's releases and changes are listed in [CHANGELOG.md](CHANGELOG.md) once the first one is out.
+Entities show up in Home Assistant as `sensor.boiler_outlet_temperature`,
+`binary_sensor.boiler_heat_demand` and so on, named after your `friendly_name`.
 
-There are two parts:
+### Using MQTT instead of the API
 
-- `boiler.yaml` sets up Modbus and all the sensors.
-- A **transport** picks how the ESP32 reaches the boiler:
-  - `usb-ft232.yaml`: the ESP32-S3 talks to the boiler's USB port. **This is the tested way.**
-  - `uart.yaml`: uses the ESP32's own serial pins. This has not been tested. It only helps if you
-    reach the boiler's serial line some other way.
+Swap the `api:` block for `mqtt:`. Home Assistant then finds the sensors on its own. This is called
+MQTT discovery, and it is on by default.
 
-Want to build from a copy of this repo instead? Use [`lochinvar.yaml`](lochinvar.yaml).
-Copy `secrets.example.yaml` to `secrets.yaml` and fill in your Wi-Fi and MQTT details.
+```yaml
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+```
+
+### Pinning and updating
+
+The `@esphome-v...` at the end of each line locks you to one release. That way your boiler setup
+won't change by surprise. To update, change the version in **both** lines and click **Install**.
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
+
+### Choosing a transport
+
+The `transport` line picks how the ESP32 reaches the boiler:
+
+- `usb-ft232.yaml`: the ESP32-S3 talks to the boiler's USB port. **This is the tested way.**
+- `uart.yaml`: uses the ESP32's own serial pins. This has not been tested. It only helps if you
+  reach the boiler's serial line some other way. To pick the pins, set `uart_tx_pin` and
+  `uart_rx_pin` under `substitutions:`. They default to GPIO17 and GPIO16.
+
+`boiler.yaml` sets up Modbus and all the sensors. It works with either transport.
+
+### Building from a copy of this repo
+
+Use [`lochinvar.yaml`](lochinvar.yaml). It loads the packages from your copy instead of GitHub. Copy
+`secrets.example.yaml` to `secrets.yaml` and fill in your Wi-Fi and MQTT details.
 
 ## When the link drops
 
-While the boiler does not answer, the readings show as unavailable, "Boiler Link OK" turns off, and
-Boiler Status reads "Link lost". After 3 minutes down, the ESP restarts itself, and "Link Watchdog
-Restarts" counts how often that happened.
+Sometimes the boiler stops answering. When it does, the readings show as unavailable and
+"Boiler Link OK" turns off. Boiler Status reads "Link lost". If the link stays down for 3 minutes,
+the ESP restarts itself. "Link Watchdog Restarts" counts how often that happened.
 
 ## Files
 
