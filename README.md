@@ -22,9 +22,9 @@ Look at your boiler's display. If it looks like the photo above, it probably wor
 - a large screen with a dial and two **Select** buttons, branded **SMART SYSTEM**,
 - a square USB port labeled **PC Connection** (not the flat **USB Memory Drive** slot).
 
-We have tested a **Knight Fire Tube** (KHB). Other boilers with this same display, like the Knight XL
-and Armor, should work but are not tested yet. Older 2-line text displays and the Crest's touchscreen
-won't work. See [Which boilers this works on](#which-boilers-this-works-on) for the full list.
+We have tested a **Knight Fire Tube** floor boiler (KHB). The wall model (WHB) uses the same manuals.
+Other boilers with this same display should work but are not tested yet: Knight KHN and WHN, Knight
+XL, and Armor. Older 2-line text displays and the Crest's touchscreen won't work. See [Which boilers this works on](#which-boilers-this-works-on) for the full list.
 
 ## Pick a way to run it
 
@@ -156,6 +156,27 @@ A control can be swapped for a newer one.
 
 Got it working on a different boiler? Please open an issue with the model and series from the rating
 plate, the firmware string, and whether the temperatures matched the display. We'll add it here.
+
+## Common questions
+
+**Can I log my Lochinvar boiler's data?** Yes. Home Assistant keeps the history of every sensor, so
+you can graph temperatures, firing rate and status over days or weeks.
+
+**How do I tell if my Lochinvar boiler is short cycling?** Watch Boiler Status, or the Ignitions
+counter. Count how many times it reaches `Running` in an hour. Lots of short burns with `Anti-cycle`
+in between means it is short cycling.
+
+**Do I need the MODB-I-O board?** No. This project uses the USB port that is already on the display.
+See [Not the MODB-I-O board](#not-the-modb-i-o-board).
+
+**Can it change my set point or turn the boiler on?** No. It is read-only on purpose. See
+[It only reads. It never writes.](#it-only-reads-it-never-writes)
+
+**Will it work on my Armor, Knight XL, KHN or WHN?** Probably, if it has the same display and port.
+We haven't tested those yet. See [Which boilers this works on](#which-boilers-this-works-on).
+
+**Does it show lockout or fault codes?** Not yet. Our boiler hasn't locked out, so we haven't seen
+one. See [Limits and known problems](#limits-and-known-problems).
 
 ## How it works
 
