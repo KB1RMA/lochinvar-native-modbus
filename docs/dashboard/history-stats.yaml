@@ -1,0 +1,39 @@
+# Daily firing stats for the dashboard, counted from Flame Present.
+# Add these to configuration.yaml (merge them into an existing `sensor:` list if you have one),
+# then restart Home Assistant. Change `binary_sensor.lochinvar_boiler_flame_present` if your device has another name.
+sensor:
+  - platform: history_stats
+    name: Boiler Run Time Today
+    unique_id: boiler_run_time_today
+    entity_id: binary_sensor.lochinvar_boiler_flame_present
+    state: "on"
+    type: time
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Boiler Cycles Today
+    unique_id: boiler_cycles_today
+    entity_id: binary_sensor.lochinvar_boiler_flame_present
+    state: "on"
+    type: count
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Boiler Duty Cycle Today
+    unique_id: boiler_duty_cycle_today
+    entity_id: binary_sensor.lochinvar_boiler_flame_present
+    state: "on"
+    type: ratio
+    start: "{{ today_at() }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Boiler Run Time This Month
+    unique_id: boiler_run_time_this_month
+    entity_id: binary_sensor.lochinvar_boiler_flame_present
+    state: "on"
+    type: time
+    start: "{{ today_at().replace(day=1) }}"
+    end: "{{ now() }}"
