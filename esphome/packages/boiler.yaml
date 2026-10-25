@@ -17,6 +17,16 @@ esphome:
     name: kb1rma.lochinvar-serial-mqtt
     version: "0.0.0" # x-release-please-version
 
+globals:
+  # millis() when Status Code last read 6 (prepurge) or 7 (ignition); 0 = not yet. See Failed Ignitions.
+  - id: last_ignition_phase_ms
+    type: uint32_t
+    initial_value: "0"
+  # Whether the last read of the ignition counters was taken outside the ignition window.
+  - id: counters_clean
+    type: bool
+    initial_value: "false"
+
 modbus:
   id: boiler_modbus
   uart_id: boiler_uart
@@ -305,6 +315,15 @@ sensor:
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
+    # The controller counts the attempt during prepurge/ignition and the ignition a few seconds
+    # later, once the flame is proven. A read in between makes Failed Ignitions go up by one until
+    # the next slow poll (it did at 20:20:41 on 2026-10-24). Mark such reads so it skips them.
+    on_value:
+      - lambda: |-
+          float s = id(status_code).state;
+          uint32_t since = millis() - id(last_ignition_phase_ms);
+          bool in_ignition = s == 6 || s == 7 || (id(last_ignition_phase_ms) != 0 && since < 30000);
+          id(counters_clean) = !isnan(s) && !in_ignition;
 
   - platform: modbus_controller
     modbus_controller_id: boiler_slow
@@ -328,6 +347,8 @@ sensor:
     entity_category: diagnostic
 
   # Lifetime attempts minus successes (about 109 already). Alert on it increasing, not on its value.
+  # Holds its last value when the counters were read during an ignition (see Ignitions above), so
+  # it can lag a real failure by one slow poll (5 min), and it stays unknown until the first clean read.
   - platform: template
     name: Failed Ignitions
     state_class: total_increasing
@@ -335,6 +356,7 @@ sensor:
     update_interval: 60s
     entity_category: diagnostic
     lambda: |-
+      if (!id(counters_clean)) return {};
       if (isnan(id(ignition_attempts).state) || isnan(id(ignitions).state)) return NAN;
       return id(ignition_attempts).state - id(ignitions).state;
 
@@ -350,6 +372,9 @@ sensor:
     value_type: U_WORD
     accuracy_decimals: 0
     entity_category: diagnostic
+    on_value:
+      - lambda: |-
+          if (x == 6 || x == 7) id(last_ignition_phase_ms) = millis();
 
   # ---- raw, unidentified status registers (disabled by default; for further reverse engineering) ----
 
