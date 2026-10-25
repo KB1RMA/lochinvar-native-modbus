@@ -3,7 +3,7 @@
 # This is the reusable package: the Modbus setup and every entity. It needs a UART with the id
 # `boiler_uart`, which one of the transport packages next to it provides (usb-ft232.yaml or
 # uart.yaml), and a device config that supplies the board, network and Home Assistant link.
-# See ../lochinvar.yaml for a complete device, and README.md for using it from GitHub.
+# See ../lochinvar.yaml for a complete device, and ../README.md for using it from GitHub.
 #
 # READ-ONLY by design: only sensors, binary sensors and text sensors are defined. There are no
 # switch, number, select, output or write_* entries, so the ESP never sends a Modbus write.
@@ -14,7 +14,7 @@
 
 esphome:
   project:
-    name: kb1rma.lochinvar-serial-mqtt
+    name: kb1rma.lochinvar-native-modbus
     version: "0.0.0" # x-release-please-version
 
 globals:

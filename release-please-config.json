@@ -1,15 +1,26 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
   "packages": {
-    ".": {
+    "esphome": {
       "release-type": "simple",
-      "package-name": "lochinvar-serial-mqtt",
+      "component": "esphome",
+      "package-name": "lochinvar-native-modbus-esphome",
       "release-as": "0.1.0",
-      "include-component-in-tag": false,
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true,
       "changelog-path": "CHANGELOG.md",
-      "extra-files": ["esphome/packages/boiler.yaml", "README.md"]
+      "exclude-paths": ["esphome/tests"],
+      "extra-files": ["packages/boiler.yaml", "README.md"]
+    },
+    "mqtt": {
+      "release-type": "simple",
+      "component": "mqtt",
+      "package-name": "lochinvar-native-modbus-mqtt",
+      "release-as": "0.1.0",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["internal/version/version.go", "README.md"]
     }
   }
 }

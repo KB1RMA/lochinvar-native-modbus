@@ -1,0 +1,37 @@
+# Weekly dependency updates. The "deps" prefix makes the pull request titles Conventional Commits
+# (see pr-title.yml); updates under mqtt/ release the bridge as a patch, the rest release nothing.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /mqtt
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+    groups:
+      go:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /mqtt
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps

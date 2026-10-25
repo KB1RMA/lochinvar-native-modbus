@@ -1,22 +1,32 @@
 name: Release Please
 run-name: Release Please
 
-# On every push to main, release-please keeps a release pull request open
-# with the next version and changelog, worked out from Conventional Commit
-# messages. Merging that pull request tags the commit (vX.Y.Z) and publishes a
-# GitHub release. The tag is the release: ESPHome fetches packages straight
-# from it (github://.../esphome/packages/boiler.yaml@vX.Y.Z), so there is
-# nothing else to build or upload. Besides CHANGELOG.md and version.txt, the
-# release pull request bumps every line marked `x-release-please-version`: the
-# package's project version (shown in Home Assistant's device info) and the
-# refs in README.md.
+# This repository releases two components, each with its own version, changelog and tag (see
+# release-please-config.json). release-please assigns a commit to a component by the paths it
+# changes, not by its scope:
 #
-# release-please acts as a GitHub App rather than with the default
-# GITHUB_TOKEN. Events made with GITHUB_TOKEN start no workflows, so the
-# release pull request would never get the status checks the default branch's
-# ruleset requires. The app needs read and write access to contents, issues
-# and pull requests. Its client ID and private key are the
-# RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY secrets.
+#   esphome/  ESPHome package   tag esphome-vX.Y.Z   esphome/CHANGELOG.md
+#   mqtt/     MQTT bridge image tag mqtt-vX.Y.Z      mqtt/CHANGELOG.md
+#
+# Commits that only touch shared files (registers/, docs/, tools/, the root README) release neither.
+#
+# On every push to main, release-please keeps one release pull request open per component with the
+# next version and changelog, worked out from Conventional Commit messages. Merging it tags the commit
+# and publishes a GitHub release.
+#
+# - ESPHome: the tag is the release. ESPHome fetches packages straight from it
+#   (github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-vX.Y.Z), so there is
+#   nothing else to build. The release pull request also bumps the lines marked
+#   `x-release-please-version` in esphome/: the package's project version and the refs in
+#   esphome/README.md.
+# - MQTT: the publish job below builds the image and pushes it to ghcr.io. The release pull request
+#   bumps the marked lines in mqtt/: internal/version/version.go and mqtt/README.md.
+#
+# release-please acts as a GitHub App rather than with the default GITHUB_TOKEN. Events made with
+# GITHUB_TOKEN start no workflows, so the release pull request would never get the status checks the
+# default branch's ruleset requires. The app needs read and write access to contents, issues and
+# pull requests. Its client ID and private key are the RELEASE_APP_CLIENT_ID and
+# RELEASE_APP_PRIVATE_KEY secrets.
 
 permissions:
   contents: read
@@ -36,6 +46,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions: {} # everything is done with the app's token
+    outputs:
+      mqtt-released: ${{ steps.release.outputs['mqtt--release_created'] }}
+      mqtt-tag: ${{ steps.release.outputs['mqtt--tag_name'] }}
     steps:
       - id: app-token
         uses: actions/create-github-app-token@v3
@@ -45,8 +58,20 @@ jobs:
           permission-contents: write # tag and publish releases, push the release branch
           permission-issues: write # create the autorelease labels
           permission-pull-requests: write # open and update the release pull request
-      - uses: googleapis/release-please-action@v5
+      - id: release
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  publish-mqtt:
+    name: Publish MQTT image
+    needs: release-please
+    if: needs.release-please.outputs.mqtt-released == 'true'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      tag: ${{ needs.release-please.outputs.mqtt-tag }}

@@ -8,3 +8,7 @@ captures/
 
 # Claude Code local settings and worktrees
 .claude/
+
+# Local builds of the MQTT bridge
+mqtt/lochinvar-mqtt
+mqtt/coverage.out

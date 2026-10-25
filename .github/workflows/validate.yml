@@ -1,5 +1,9 @@
-name: Validate Configs and Register Map
-run-name: Validate Configs and Register Map
+name: Validate
+run-name: Validate
+
+# Both components on every pull request: the ESPHome package (register map, read-only check, config
+# and compile) and the Go MQTT bridge in mqtt/ (tidy, vet, golangci-lint, race tests, fuzzing,
+# govulncheck, and a multi-arch Docker build without pushing).
 
 permissions:
   contents: read
@@ -30,8 +34,20 @@ jobs:
       - run: pip install "$(grep '^pyyaml' requirements.txt)"
       - run: python tools/check_registers.py
       # Fails on any write-capable component or key, a register missing from the map, and a
-      # package version that does not match .release-please-manifest.json.
+      # package version that does not match the esphome entry in .release-please-manifest.json.
       - run: python tools/check_esphome.py
+
+  workflows:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      # actionlint (with shellcheck on run: scripts), configured in .github/actionlint.yaml.
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
 
   config:
     name: ESPHome config
@@ -90,3 +106,66 @@ jobs:
       - run: pip install -r requirements.txt
       - run: cp esphome/secrets.example.yaml esphome/secrets.yaml
       - run: esphome compile "${{ matrix.config }}"
+
+  mqtt-go:
+    name: MQTT bridge lint and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mqtt
+    steps:
+      - uses: actions/checkout@v7
+
+      # The newest 1.26 patch release, so govulncheck judges the current standard library.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.x'
+          check-latest: true
+          cache-dependency-path: mqtt/go.sum
+
+      - name: go.mod and go.sum are tidy
+        run: go mod tidy -diff
+      - run: go mod verify
+      - run: go vet ./...
+
+      # Linters and formatters (gofumpt, goimports) from mqtt/.golangci.yml.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          working-directory: mqtt
+
+      # Includes the read-only checks (every frame sent is a function 03 read, one Write call in the
+      # code), parity with esphome/packages/boiler.yaml, every address in registers/controller.yaml,
+      # and the version against .release-please-manifest.json.
+      - name: Test (race detector, shuffled order)
+        run: go test -race -shuffle=on -coverpkg=./... -coverprofile=coverage.out ./...
+      - name: Coverage
+        run: go tool cover -func=coverage.out | tail -n 1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Fuzz the request builder
+        run: go test -run='^$' -fuzz=FuzzReadRequest -fuzztime=15s ./internal/modbus
+
+      - name: Known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  mqtt-docker:
+    name: MQTT bridge Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      # The same platforms docker-publish.yml pushes on release, built but not pushed. Go
+      # cross-compiles, so no emulation is needed.
+      - uses: docker/build-push-action@v7
+        with:
+          context: mqtt
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: false
+          cache-from: type=gha,scope=mqtt
+      - name: Smoke test the amd64 image
+        run: |
+          docker buildx build --load -t lochinvar-mqtt:ci --cache-from type=gha,scope=mqtt mqtt
+          docker run --rm lochinvar-mqtt:ci --version
+          docker run --rm lochinvar-mqtt:ci --help

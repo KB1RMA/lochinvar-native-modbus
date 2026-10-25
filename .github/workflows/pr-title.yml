@@ -12,7 +12,8 @@ run-name: PR Title
 #   fix(status): decode the lockout code      -> "Bug Fixes"
 #   feat!: rename the boiler_uart id          -> "BREAKING CHANGES"
 #
-# How far each one bumps the version is set in release-please-config.json.
+# How far each one bumps the version is set in release-please-config.json. Which component it bumps
+# (esphome or mqtt) comes from the paths the PR changes, not from the scope.
 # Before 1.0.0, bump-minor-pre-major and bump-patch-for-minor-pre-major make
 # a breaking change bump the minor version and a feat bump the patch.
 #
