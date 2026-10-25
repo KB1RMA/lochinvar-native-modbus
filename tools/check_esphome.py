@@ -59,15 +59,20 @@ def check_config(path, cfg, known):
 
 
 def check_versions():
-    """release-please bumps these together; a mismatch means one was edited by hand."""
-    expected = json.loads((ROOT / ".release-please-manifest.json").read_text())["."]
+    """release-please bumps these together; a mismatch means one was edited by hand. The ESPHome package
+    is the "esphome" component (tags esphome-vX.Y.Z); the MQTT bridge in mqtt/ is checked by its tests."""
+    expected = json.loads((ROOT / ".release-please-manifest.json").read_text())["esphome"]
     errors = []
     project = yaml.load(PACKAGE.read_text(), Loader=Loader)["esphome"]["project"]["version"]
     if project != expected:
         errors.append(f"{PACKAGE.relative_to(ROOT)}: project version {project} != manifest {expected}")
-    for ref in re.findall(r"@v([^\s#]+)\s*# x-release-please-version", (ROOT / "README.md").read_text()):
+    readme = ESPHOME / "README.md"
+    refs = re.findall(r"@esphome-v([^\s#]+)\s*# x-release-please-version", readme.read_text())
+    if not refs:
+        errors.append(f"{readme.relative_to(ROOT)}: no package refs marked x-release-please-version")
+    for ref in refs:
         if ref != expected:
-            errors.append(f"README.md: package ref v{ref} != manifest {expected}")
+            errors.append(f"{readme.relative_to(ROOT)}: package ref esphome-v{ref} != manifest {expected}")
     return errors
 
 

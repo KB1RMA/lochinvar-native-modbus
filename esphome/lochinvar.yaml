@@ -3,7 +3,7 @@
 # The boiler itself lives in packages/boiler.yaml (Modbus setup and every entity, read-only by
 # design) and the link in packages/usb-ft232.yaml. This file adds only the board, network and
 # Home Assistant link. To build it from a copy of this repository, copy secrets.example.yaml to
-# secrets.yaml. To use the packages from GitHub without a copy, see README.md.
+# secrets.yaml. To use the packages from GitHub without a copy, see README.md in this folder.
 #
 # HARDWARE: an ESP32-S3 acts as USB host for the FTDI FT232R inside the boiler, over a plain USB
 # cable. Bridge the S3's USB-OTG pad so its USB port supplies 5 V. See packages/usb-ft232.yaml.

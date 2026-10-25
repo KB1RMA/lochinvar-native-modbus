@@ -1,0 +1,107 @@
+name: Publish MQTT Image
+run-name: Publish MQTT image ${{ inputs.tag }}
+
+# Builds the Go MQTT bridge in mqtt/ for amd64, arm64 and arm/v7 (Raspberry Pi) and pushes it to GHCR as
+# X.Y.Z, X.Y and latest. release-please.yml calls this when it releases the mqtt component; run it by
+# hand (Actions > Publish MQTT Image > Run workflow) to rebuild an existing release, e.g. for a newer
+# base image. X.Y and latest only move when the tag is the newest release of its minor version and
+# overall, so rebuilding an older release never moves them back.
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build, e.g. mqtt-v0.1.0
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build, e.g. mqtt-v0.1.0
+        required: true
+        type: string
+
+env:
+  IMAGE: ghcr.io/kb1rma/lochinvar-native-modbus
+
+jobs:
+  publish:
+    name: Build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io
+      id-token: write # sign the provenance attestation with Sigstore
+      attestations: write # record it in the repository's attestations
+    steps:
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$TAG" =~ ^mqtt-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$TAG is not an mqtt-vX.Y.Z release tag"
+            exit 1
+          fi
+          echo "VERSION=${TAG#mqtt-v}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - name: Decide which floating tags move
+        run: |
+          versions=$(git ls-remote --tags --refs origin 'mqtt-v*' | sed 's|.*refs/tags/mqtt-v||' \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
+          newest=$(tail -n 1 <<< "$versions")
+          minor=${VERSION%.*}
+          newest_minor=$(grep -E "^${minor//./\\.}\.[0-9]+$" <<< "$versions" | tail -n 1)
+          echo "LATEST=$([[ "$VERSION" == "$newest" ]] && echo true || echo false)" >> "$GITHUB_ENV"
+          echo "MINOR=$([[ "$VERSION" == "$newest_minor" ]] && echo true || echo false)" >> "$GITHUB_ENV"
+          echo "Newest release $newest, newest $minor.x $newest_minor; building $VERSION"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ env.MINOR }}
+            type=raw,value=latest,enable=${{ env.LATEST }}
+          labels: |
+            org.opencontainers.image.title=lochinvar-native-modbus MQTT bridge
+            org.opencontainers.image.description=Read-only Modbus RTU to MQTT bridge with Home Assistant discovery for a Lochinvar boiler
+            org.opencontainers.image.source=https://github.com/KB1RMA/lochinvar-native-modbus
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: mqtt
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=mqtt
+          cache-to: type=gha,scope=mqtt,mode=max
+          provenance: mode=max
+          sbom: true
+
+      # BuildKit's provenance and SBOM above are unsigned. This adds a signed SLSA provenance
+      # attestation for the image index, checked with:
+      #   gh attestation verify oci://ghcr.io/kb1rma/lochinvar-native-modbus:X.Y.Z -R KB1RMA/lochinvar-native-modbus
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

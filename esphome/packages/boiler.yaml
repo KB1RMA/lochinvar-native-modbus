@@ -3,7 +3,7 @@
 # This is the reusable package: the Modbus setup and every entity. It needs a UART with the id
 # `boiler_uart`, which one of the transport packages next to it provides (usb-ft232.yaml or
 # uart.yaml), and a device config that supplies the board, network and Home Assistant link.
-# See ../lochinvar.yaml for a complete device, and README.md for using it from GitHub.
+# See ../lochinvar.yaml for a complete device, and ../README.md for using it from GitHub.
 #
 # READ-ONLY by design: only sensors, binary sensors and text sensors are defined. There are no
 # switch, number, select, output or write_* entries, so the ESP never sends a Modbus write.
@@ -14,8 +14,30 @@
 
 esphome:
   project:
-    name: kb1rma.lochinvar-serial-mqtt
+    name: kb1rma.lochinvar-native-modbus
     version: "0.0.0" # x-release-please-version
+
+globals:
+  # millis() when Status Code last read 6 (prepurge) or 7 (ignition); 0 = not yet. See Failed Ignitions.
+  - id: last_ignition_phase_ms
+    type: uint32_t
+    initial_value: "0"
+  # Whether the last read of the ignition counters was taken outside the ignition window.
+  - id: counters_clean
+    type: bool
+    initial_value: "false"
+  # Link watchdog (see the interval at the end): armed once a read has succeeded since boot.
+  - id: link_seen_ok
+    type: bool
+    initial_value: "false"
+  # millis() when the link went down, 0 while it is up.
+  - id: link_down_since
+    type: uint32_t
+    initial_value: "0"
+  - id: watchdog_restarts
+    type: uint32_t
+    restore_value: true
+    initial_value: "0"
 
 modbus:
   id: boiler_modbus
@@ -43,6 +65,10 @@ modbus_controller:
       - binary_sensor.invalidate_state: burner_request
       - binary_sensor.invalidate_state: anti_cycle
       - binary_sensor.invalidate_state: flame_present
+      - lambda: |-
+          if (id(link_seen_ok)) id(link_down_since) = std::max<uint32_t>(millis(), 1);
+    on_online:
+      - lambda: id(link_down_since) = 0;
 
   # Same boiler, polled less often: settings and lifetime counters.
   - id: boiler_slow
@@ -305,6 +331,15 @@ sensor:
     state_class: total_increasing
     accuracy_decimals: 0
     entity_category: diagnostic
+    # The controller counts the attempt during prepurge/ignition and the ignition a few seconds
+    # later, once the flame is proven. A read in between makes Failed Ignitions go up by one until
+    # the next slow poll (it did at 20:20:41 on 2026-10-24). Mark such reads so it skips them.
+    on_value:
+      - lambda: |-
+          float s = id(status_code).state;
+          uint32_t since = millis() - id(last_ignition_phase_ms);
+          bool in_ignition = s == 6 || s == 7 || (id(last_ignition_phase_ms) != 0 && since < 30000);
+          id(counters_clean) = !isnan(s) && !in_ignition;
 
   - platform: modbus_controller
     modbus_controller_id: boiler_slow
@@ -327,7 +362,19 @@ sensor:
     accuracy_decimals: 0
     entity_category: diagnostic
 
+  # How often the link watchdog has restarted the ESP (kept across restarts).
+  - platform: template
+    name: Link Watchdog Restarts
+    state_class: total_increasing
+    accuracy_decimals: 0
+    update_interval: 60s
+    entity_category: diagnostic
+    icon: mdi:restart-alert
+    lambda: return id(watchdog_restarts);
+
   # Lifetime attempts minus successes (about 109 already). Alert on it increasing, not on its value.
+  # Holds its last value when the counters were read during an ignition (see Ignitions above), so
+  # it can lag a real failure by one slow poll (5 min), and it stays unknown until the first clean read.
   - platform: template
     name: Failed Ignitions
     state_class: total_increasing
@@ -335,6 +382,7 @@ sensor:
     update_interval: 60s
     entity_category: diagnostic
     lambda: |-
+      if (!id(counters_clean)) return {};
       if (isnan(id(ignition_attempts).state) || isnan(id(ignitions).state)) return NAN;
       return id(ignition_attempts).state - id(ignitions).state;
 
@@ -350,6 +398,10 @@ sensor:
     value_type: U_WORD
     accuracy_decimals: 0
     entity_category: diagnostic
+    on_value:
+      - lambda: |-
+          id(link_seen_ok) = true;
+          if (x == 6 || x == 7) id(last_ignition_phase_ms) = millis();
 
   # ---- raw, unidentified status registers (disabled by default; for further reverse engineering) ----
 
@@ -463,3 +515,18 @@ binary_sensor:
     entity_category: diagnostic
     lambda: |-
       return id(boiler).get_module_offline() == false;
+
+# Link watchdog. On 2026-10-24 the link died mid-burn (20:24:33) and stayed dead for 17 minutes, until the
+# ESP restarted; on the Mac only a replug helped. Restart the ESP once the link has been down 3 minutes.
+# It only arms after a successful read since boot, so a boiler that is off or unplugged does not cause a
+# restart loop. Whether a restart is enough (it doesn't cut the cable's 5 V) shows in Boiler Link OK
+# after one, and Link Watchdog Restarts counts them.
+interval:
+  - interval: 30s
+    then:
+      - lambda: |-
+          uint32_t since = id(link_down_since);
+          if (since == 0 || millis() - since < 180000) return;
+          id(watchdog_restarts) += 1;
+          ESP_LOGW("link_watchdog", "Boiler link down for %u s, restarting", (unsigned) ((millis() - since) / 1000));
+          App.safe_reboot();

@@ -1,0 +1,8 @@
+# actionlint configuration (validate.yml runs it on every pull request).
+paths:
+  .github/workflows/release-please.yml:
+    ignore:
+      # actionlint's bundled metadata for create-github-app-token predates v3, where client-id
+      # replaced the deprecated app-id.
+      - 'missing input "app-id" which is required by action "actions/create-github-app-token@v3"'
+      - 'input "client-id" is not defined in action "actions/create-github-app-token@v3"'
