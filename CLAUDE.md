@@ -65,8 +65,9 @@ On the Mac, the FTDI link went silent the second ignition started, every time (a
 does not help (tcsetattr EINVAL). Only an unplug and replug does. `tools/probe/08_long_capture.py` retries
 every 10 s and resumes by itself after a replug. Suspect spark noise on the cable.
 
-On the ESP32-S3 bridge the link stayed up through both ignitions seen so far (2026-10-24, 14:02 and 15:38;
-log session 4). Why is not known. Two cycles are not proof, so keep checking Boiler Link OK.
+On the ESP32-S3 bridge the link survived 24 ignitions, but it died once mid-burn (2026-10-24 20:24:33, 3.5 min
+into running) and stayed dead 17 min until the ESP restarted (log session 5). The package now clears the readings
+while the link is down and restarts the ESP after 3 min (Link Watchdog Restarts counts them).
 The ESP rebooted 3 times (14:22, 14:42, 14:48) that no OTA flash explains; worth watching too.
 
 ## Related

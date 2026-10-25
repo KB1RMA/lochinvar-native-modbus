@@ -333,6 +333,40 @@ watching Boiler Link OK over more cycles before calling it fixed.
   happened during a burn. The slow counters went unknown for about a minute after each drop, so each was a
   reboot. 14:00 and 15:15 line up with firmware commits (OTA). 14:22, 14:42 and 14:48 are not explained.
 
+## Session 5: overnight review of the ESP32-S3 bridge (2026-10-24 13:50 to 2026-10-25 09:23)
+
+From the Home Assistant recorder and a live ESPHome log. 24 burn cycles, 21 of them after 04:00.
+
+### What checked out
+
+- Every burn followed prepurge, 7, running, post-purge, anti-cycle, standby. "Demand, held off" and "Pump
+  delay" showed where expected. No other status code appeared.
+- Since the 20:41 restart, ignitions and ignition attempts both rose by 21, matching the 21 ignitions in
+  the status history. SH cycles rose by 21 as well. SH run time rose 2 h against about 1.3 h of burning (whole hours).
+- The live log showed every 5 s poll succeeding, with no retries.
+
+### Problems found (fixed in the package the same day)
+
+- **The link died mid-burn on the ESP too.** At 20:24:33, about 3.5 min into running and not at ignition,
+  Boiler Link OK went off and stayed off until the ESP restarted at 20:41:34 (same firmware, so not an OTA).
+  Who or what restarted it is not known. Meanwhile every reading held its last value, so Home Assistant
+  showed "Running" and a 12.6 uA flame for 17 minutes. Readings now clear when the link drops, and a
+  watchdog restarts the ESP after 3 minutes. Whether a software restart clears the wedge, as it seemed to here,
+  shows in Link Watchdog Restarts and Boiler Link OK.
+- **False failed ignition.** The 5-minute counter poll at 20:20:41 came during prepurge: attempts had
+  gone up, ignitions had not yet, so Failed Ignitions read 110 for 20 minutes. Counter reads taken during
+  prepurge/ignition or in the 30 s after are now skipped.
+- **Firmware behind the repo.** The dashboard's device config is a pasted copy of the package, built
+  2026-10-24 15:13, so Home Assistant showed "Unknown (7)" at every ignition.
+- **No long-term statistics** for the four temperatures and the flame signal. An early firmware sent the
+  units garbled (`¬∞F`, `¬µA`) and the recorder kept those as the units. This needs fixing in Home Assistant
+  (Developer Tools, Statistics), not in the package.
+
+### Boiler behaviour
+
+From 04:05 to 09:13 the boiler fired 21 times. Many burns were 1-3 minutes, with about 50 s of anti-cycle in
+between. The outlet reached 168-173 F against a 175 F SH1 setpoint just before each burn ended.
+
 ## Open questions / next steps
 
 1. Electrical level and connector of the boiler port; boiler model; fill the README TODOs.
