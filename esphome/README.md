@@ -13,6 +13,7 @@ Boiler controller  --USB cable-->  ESP32-S3  --Wi-Fi-->  MQTT broker  -->  Home 
 
 - A Lochinvar boiler with a USB port on its controller (see "Tested hardware" in the main README).
 - An **ESP32-S3** board with a USB port that can act as a host. We used an ESP32-S3-DevKitC-1 clone.
+- A soldering iron and a little solder, to bridge one pad on the board (see below).
 - A regular USB cable to connect the boiler to the ESP32-S3.
 - Home Assistant with an MQTT broker (such as the Mosquitto add-on). ESPHome's own API also works.
 
@@ -20,9 +21,13 @@ Boiler controller  --USB cable-->  ESP32-S3  --Wi-Fi-->  MQTT broker  -->  Home 
 
 1. Plug the boiler's USB cable into the ESP32-S3's **USB** port (sometimes labeled "OTG").
 2. Power the board through its other port (labeled **COM** or **UART**).
-3. Bridge the **USB-OTG** solder pad on the board. This lets the USB port send 5 volts to the
-   boiler's chip. If you skip this, the boiler never shows up, and the log says
-   "Channel not initialised".
+3. Bridge the **USB-OTG** solder pad on the board. Put a small blob of solder across its two halves.
+   This lets the USB port send 5 volts to the boiler's chip.
+
+> [!IMPORTANT]
+> The USB-OTG pad must be bridged. The boiler's USB chip gets its power from the ESP32's USB port.
+> Out of the box, that port sends no power. Powering the board through COM does not fix this. If
+> you skip this step, the boiler never shows up, and the log says "Channel not initialised".
 
 The link settings are 19200 baud, 8N1, device ID 1. The package sets these for you.
 
@@ -34,7 +39,7 @@ from GitHub. You never copy the sensors into your own file.
 
 ### Quick start with ESPHome Device Builder
 
-1. Wire the board as described above.
+1. Wire the board as described above. Don't forget to bridge the **USB-OTG** pad.
 2. Open ESPHome Device Builder. This is the ESPHome add-on or dashboard. Click **New device**.
    Name it something like `boiler` and pick **ESP32-S3**. Device Builder fills in the board, Wi-Fi,
    API and OTA parts for you.
