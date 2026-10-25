@@ -157,6 +157,21 @@ project does **not** use that board. The controller's built-in port uses differe
 stores temperatures in a different way. If you have a MODB-I-O board, see
 [cwm12345/lochinvar-modbus](https://github.com/cwm12345/lochinvar-modbus).
 
+Which one should you use?
+
+| | MODB-I-O board | This project |
+|---|---|---|
+| Cost | You buy the board and wire it in | Free. You plug a USB cable into the display |
+| Registers | Documented by Lochinvar | Worked out by us. A few are still guesses |
+| Data | A short summary | Much more: flame signal, burner stage, blower, pump, counters |
+| Control | Can turn the boiler on or off and change the set point | Read-only. It can't change anything |
+| Fault codes | Has status and lockout codes | Lockout codes not found yet |
+| Wiring | RS-485: long runs, handles electrical noise | USB: short cable. The link has dropped a few times while the burner was lighting or running |
+| Updates | Should keep working after a controller update | A controller update could move the registers |
+
+Use this project if you want detailed monitoring for free. Get the MODB-I-O board if you need to
+control the boiler, need official fault codes, or are wiring it into a building system.
+
 ## Which boilers this works on
 
 This bridge talks to the port that Lochinvar's own Windows program for the SMART SYSTEM control
