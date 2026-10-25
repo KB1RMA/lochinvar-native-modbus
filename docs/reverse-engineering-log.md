@@ -1,7 +1,7 @@
 # Reverse-engineering log
 
 Date of work: 2026-10-24 (about 09:30 to 10:20 local). Boiler: Lochinvar Knight Fire Tube KHB155N, Series 100,
-natural gas, 155,000 BTU/hr input (15,500 minimum, 10:1), built 2023 (rating plate, see session 6).
+natural gas, 155,000 BTU/hr input (15,500 minimum, 10:1), built 2023 (rating plate).
 
 ## Method (scripts in `tools/probe/`, run with `python3 -I`, no pyserial needed, uses termios)
 
@@ -368,34 +368,9 @@ From the Home Assistant recorder and a live ESPHome log. 24 burn cycles, 21 of t
 From 04:05 to 09:13 the boiler fired 21 times. Many burns were 1-3 minutes, with about 50 s of anti-cycle in
 between. The outlet reached 168-173 F against a 175 F SH1 setpoint just before each burn ended.
 
-## Session 6: the Lochinvar manuals (2026-10-25, desk only)
-
-No reads were sent to the boiler. The Knight Fire Tube service manual and I&O manual (Series 100-121) and Lochinvar's
-SMART SYSTEM PC Program Instructions were compared with the map. Details are in
-[`manual-cross-reference.md`](manual-cross-reference.md). In short:
-
-- The USB port is the display's "PC Connection" port for Lochinvar's WinPro program ("SMART SYSTEM 938"). The
-  firmware string's "938FT" is that platform, Fire Tube variant. That settles the electrical level (USB) and
-  sets which boilers the README says this covers.
-- 1068-1121 is WinPro's factory parameter table in order. The outlet, flue and delta T limits match the service
-  manual exactly (185/195 F, 215/225 F, 55/60 F). Temperature differences are raw / 25 F and times are 0.1 s.
-- Labeled from manual defaults and the logs: the SH1 outdoor reset curve (35 F -> 180 F, 70 F -> 130 F; it predicts
-  r142 within 0.2 F), SH2/SH3 curves, freeze protection, pump delays (boiler 60 s, matching the post-pump), night
-  setback triggers (1223-1250), BMS settings, service reminders, and the installer password at 1144.
-- r146 is WinPro's dSP. r111 shows the INCFAN / INCFAN_R step limits. 1109/1110 are the purge and ignition fan speeds.
-  r1311 is probably SH hours below 50 % rate.
-- From the manuals, not seen yet: status START (maybe r84 = 5), 4 ignition tries before lockout, a last-10-lockouts
-  table and per-fault counters (probably 1316-1384), and the Derivative Outlet / Flue rates (r150?).
-
-The boiler was thought to be a 2008 install. The Knight boilers of that time had a 2-line display and an RJ11 PC
-jack, and this one has the large display, a USB port and 2018 Fire Tube firmware. The rating plate settled it:
-**KHB155N, Series 100**, serial prefix 2332 (most likely 2023, week 32), heat exchanger stamped 2022. That fits
-the 24,266 power-on hours (about 2.8 years) and puts this boiler in the range the manuals above cover.
-
 ## Open questions / next steps
 
-1. Done in session 6: KHB155N Series 100, USB port. Still open: whether other SMART SYSTEM 938 boilers (KHN, WHN,
-   WHB, Knight XL, Armor) use the same addresses.
+1. Whether other SMART SYSTEM 938 boilers (KHN, WHN, WHB, Knight XL, Armor) use the same addresses.
 2. Status registers: partly done in session 2 (r84 codes, r85 timer, r137 anti-cycle, r140 burner request, r132
    boiler pump, demand and blower flags). Ignition (r84 = 7) seen in session 4. Still open: the long
    35 s prepurge in session 4; whether r129/r115 really are igniter and gas valve, now that the link stays

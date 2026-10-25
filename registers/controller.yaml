@@ -12,10 +12,17 @@
 # mirrors: registers that hold the same value (equal in >=95 percent of log samples; the rest is
 # sampling skew). Registers that track a value but differ (second thermistor, requested vs actual)
 # get their own entry.
+#
+# references (Lochinvar documents, not in this repo; entries cite them as "service manual" and "WinPro"):
+#   Knight Fire Tube Service Manual 100305279 Rev E and I&O Manual 100305277 Rev M (models 55-285, Series 100-121):
+#     protections, parameter defaults and ranges, display screens, fault list.
+#   SMART SYSTEM PC Program Instructions SM-PCPII Rev D: Lochinvar's WinPro program, which uses this same port.
+#     Its screenshots list every parameter in order with short names (S1AUTOLIMHYS, FANIGN, ...), and its status
+#     and fault log screens show what the control exports live.
 
 source: controller-native
 device:
-  controller: SMART SYSTEM                         # Lochinvar's name for this control; see docs/manual-cross-reference.md
+  controller: SMART SYSTEM                         # Lochinvar's name for this control
   controller_firmware: "SIT 547_00 May 15 2018"   # decoded from registers 30-44; full string ends "938FT"
   platform: "938"                                  # Lochinvar's PC program for this control is "SMART SYSTEM 938"; FT = Fire Tube
   port: display "PC Connection" USB port           # the port Lochinvar's WinPro PC program uses
@@ -137,7 +144,7 @@ settings:
   - {name: fan_curve_points, address: [1147, 1148, 1149], encoding: u16, unit: rpm, confidence: guess, note: "3500/5300/6750 between min and max at 1146/1150; not all equal, list is a group, not copies"}
   - {name: fan_speed_purge,  address: 1109, encoding: u16, unit: rpm, confidence: likely, note: "2900; fan held 2900 rpm in prepurge and post-purge. WinPro FANHIGH, by table order"}
   - {name: fan_speed_ignition, address: 1110, encoding: u16, unit: rpm, confidence: guess, note: "2900. WinPro FANIGN, next after FANHIGH; the two are equal here, so order is the only evidence"}
-  # From here on: matched against the service manual and the WinPro parameter tables (docs/manual-cross-reference.md).
+  # From here on: matched against the service manual and the WinPro parameter tables (see references).
   # Factory limits (WinPro "Table 4 - Lochinvar", same order as 1070-1121).
   - {name: high_limit_auto_reset_hysteresis, address: 1070, encoding: temp_delta_f, confidence: likely, note: "10 F; WinPro S1AUTOLIMHYS; service manual: restarts 10 F below the auto reset limit"}
   - {name: high_limit_auto_reset_dwh, address: 1071, encoding: temp_f, confidence: guess, note: "200 F; WinPro S1AUTOHILIMDWH (direct water heater use)"}
@@ -180,10 +187,11 @@ info:
   - {name: firmware_string, address: 30, words: 15, encoding: ascii_swapped, confidence: confirmed, note: "SIT 547_00 May 15 2018 938FT"}
 
 unmapped_regions:
-  - {range: [1006, 1295], note: "Parameter block; partly labeled from the WinPro parameter tables (docs/manual-cross-reference.md). 1068-1121 follow WinPro's 'Table 4 - Lochinvar' in order (also gradient limiting 1088-1096, fan PID 1103-1105, flame current support 1106-1108, pump timers 1111-1113, DHW PID 1115-1117). 1272-1283 look like the ramp delay steps."}
+  - {range: [1006, 1295], note: "Parameter block; partly labeled from the WinPro parameter tables. 1068-1121 follow WinPro's 'Table 4 - Lochinvar' in order (also gradient limiting 1088-1096, fan PID 1103-1105, flame current support 1106-1108, pump timers 1111-1113, DHW PID 1115-1117). 1272-1283 look like the ramp delay steps."}
   - {range: [1144, 1144], note: "5309, the installer menu password printed in the service manual. Never publish it."}
   - {range: [1316, 1384], note: "1316-1332 all 0 and 1335-1365 all 0xFFFF: probably the per-fault counters and an empty last-10-lockouts table from WinPro's fault log. Capture this block before and after a lockout."}
   - {range: [150, 150], note: "Candidate for WinPro's Derivative Outlet or Derivative Flue (rate of change shown on its status screen)."}
+  - {range: [0, 255], note: "Not found yet: WinPro's 'Limitations' flags (outlet temp, delta T, flue temp, flame current low; never active in our captures), DHW pump, louver relay and system pump outputs, LOOP 1-3 temps from the optional MTLC board."}
   - {range: [72, 72], note: "Not a counter: read 3828 (= SH run hours) in the idle scan by coincidence, wanders 3553-3887 in the log."}
   - {range: [150, 151], note: "r150 signed, about +/-7, maybe a rate of change; r151 rises in steps while firing."}
   - {range: [172, 176], note: "Controller clock (20, 5, 18, hour, minute). Runs, but about 54 min slow and the date is wrong; do not use as a timestamp. The manual says it must be set after the power has been off over 4 h and never adjusts for DST; WinPro sets it on connect (a write, so we don't)."}

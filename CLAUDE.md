@@ -6,10 +6,10 @@ controller's built-in Modbus RTU serial port. There is no MODB-I-O board. Two br
 the ESPHome package (`esphome/`) and a Docker container (`mqtt/`). They must expose the same entities.
 
 Start here: `registers/controller.yaml` (the map), `docs/reverse-engineering-log.md` (how we got it,
-display readings used as ground truth, open questions), `docs/discovery-notes.md` (earlier notes),
-`docs/manual-cross-reference.md` (what the Knight Fire Tube manuals and Lochinvar's WinPro PC-program manual say;
-the port is the display's "PC Connection" port, the control is SMART SYSTEM "938", and the parameter block
-follows WinPro's parameter tables).
+display readings used as ground truth, open questions), `docs/discovery-notes.md` (earlier notes).
+The port is the display's "PC Connection" USB port that Lochinvar's WinPro program uses (control platform SMART SYSTEM
+"938"), and the parameter block follows WinPro's parameter tables; the map's `references` header lists the manuals.
+Keep findings in the map, README or CLAUDE.md; the history of how they were found goes in PR descriptions and commits.
 
 ## Hard rules
 
