@@ -109,7 +109,8 @@ Copy `esphome/secrets.example.yaml` to `esphome/secrets.yaml` and fill in your W
 
 - **The link can drop when the burner lights.** On our boiler, the USB link sometimes goes quiet
   right at ignition. We think electrical noise from the spark causes it. Unplugging and replugging
-  the USB cable brings it back. The "Boiler Link OK" sensor shows when this happens.
+  the USB cable brings it back. The "Boiler Link OK" sensor shows when this happens. While the link
+  is down, the readings show as unavailable and Boiler Status reads "Link lost".
 - **The screen is a little behind.** The boiler's display lags the live data by about 10 seconds.
   So, if you compare them, expect small differences while the burner is changing.
 - **Some registers are still guesses.** The register map marks each one as known, a guess, or unknown.

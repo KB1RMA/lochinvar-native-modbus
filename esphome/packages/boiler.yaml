@@ -30,6 +30,19 @@ modbus_controller:
     update_interval: 5s          # live readings and status
     max_cmd_retries: 3
     offline_skip_updates: 6      # back off when the boiler stops answering
+    # The controller keeps the last values when the boiler stops answering, so on 2026-10-24 Home
+    # Assistant showed "Running" for 17 minutes of a dead link. Clear every reading from this group
+    # instead; the next good poll publishes real values again. Delta T and Boiler Status follow.
+    on_offline:
+      - lambda: |-
+          for (auto *s : {id(outlet_temp), id(inlet_temp), id(exhaust_temp), id(outdoor_temp),
+                          id(flame_signal), id(fan_speed), id(firing_rate), id(boiler_pump_output),
+                          id(status_code), id(raw_r138), id(raw_r139), id(raw_r140)})
+            s->publish_state(NAN);
+      - binary_sensor.invalidate_state: heat_demand
+      - binary_sensor.invalidate_state: burner_request
+      - binary_sensor.invalidate_state: anti_cycle
+      - binary_sensor.invalidate_state: flame_present
 
   # Same boiler, polled less often: settings and lifetime counters.
   - id: boiler_slow
@@ -80,6 +93,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: exhaust_temp
     name: Exhaust Temperature
     address: 63
     register_type: holding
@@ -94,6 +108,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: outdoor_temp
     name: Outdoor Temperature
     address: 75
     register_type: holding
@@ -121,6 +136,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: fan_speed
     name: Fan Speed
     address: 110
     register_type: holding
@@ -131,6 +147,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: firing_rate
     name: Firing Rate
     address: 80
     register_type: holding
@@ -338,6 +355,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: raw_r138
     name: Raw State r138
     address: 138
     register_type: holding
@@ -348,6 +366,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: raw_r139
     name: Raw State r139
     address: 139
     register_type: holding
@@ -358,6 +377,7 @@ sensor:
 
   - platform: modbus_controller
     modbus_controller_id: boiler
+    id: raw_r140
     name: Raw State r140
     address: 140
     register_type: holding
@@ -375,6 +395,7 @@ text_sensor:
     name: Boiler Status
     update_interval: 5s
     lambda: |-
+      if (id(boiler).get_module_offline()) return {"Link lost"};
       float s = id(status_code).state;
       if (isnan(s)) return {"Unavailable"};
       switch ((int) s) {
@@ -429,6 +450,7 @@ binary_sensor:
 
   # Flame signal read 0 with the burner off and 2.1 uA within a second of ignition.
   - platform: template
+    id: flame_present
     name: Flame Present
     icon: mdi:fire
     lambda: |-
