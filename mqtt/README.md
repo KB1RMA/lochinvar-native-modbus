@@ -82,8 +82,7 @@ these four things in its setup screen:
 
 Each release has its own tag, like `0.1.0`. The `0.1` tag always points to the newest `0.1.x` release.
 The `latest` tag always points to the newest release. Images are built for 64-bit PCs (amd64), 64-bit
-ARM (arm64) and 32-bit ARM (arm/v7). [CHANGELOG.md](CHANGELOG.md) lists the changes once the first
-release is out.
+ARM (arm64) and 32-bit ARM (arm/v7). [CHANGELOG.md](CHANGELOG.md) lists the changes in each release.
 
 Each image has a signed build provenance attestation, made by this repository's release workflow. To check
 that an image was built here from the release tag, run:

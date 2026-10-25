@@ -35,7 +35,7 @@ Both ways give you the same sensors.
 | **Runs on** | A small, low-cost ESP32-S3 board | A Linux computer near the boiler, like a Raspberry Pi |
 | **Talks to Home Assistant by** | Wi-Fi, with the ESPHome API or MQTT | Your network, with MQTT |
 | **Good if** | You use ESPHome, or run Home Assistant OS | You already have a small server by the boiler |
-| **Extra work** | One solder blob on the board | None |
+| **Extra work** | One solder blob on the board | Needs Linux. Docker Desktop on a Mac or PC can't reach the USB port |
 | **Set it up** | [esphome/README.md](esphome/README.md) | [mqtt/README.md](mqtt/README.md) |
 
 ```
@@ -56,10 +56,10 @@ All of these show up in Home Assistant under one device.
 
 | Group | Entities |
 |---|---|
-| **Temperatures** | Outlet, Inlet, Exhaust and Outdoor Temperature (°F), Delta T (outlet minus inlet), and Target Temperature (what the boiler aims for during a call for heat) |
+| **Temperatures** | Outlet, Inlet, Exhaust and Outdoor Temperature (°F), Delta T (outlet minus inlet), Target Temperature (what the boiler aims for during a call for heat), and SH1 Reset Target (the heating set point after outdoor reset) |
 | **Burner** | Firing Rate (%), Flame Signal (µA), Flame Present, Fan Speed (rpm), Boiler Pump Output (%) |
-| **Status** | Boiler Status: Standby, Demand, Demand held off, Prepurge, Ignition, Running, Post-purge, Pump delay, Anti-cycle or Link lost. Also Heat Demand, Burner Request and Anti-Cycle on their own. |
-| **Settings** (read every 5 min) | SH1, SH2, SH3 and DHW Setpoint, High Limit Auto Reset and Manual Reset, and SH1 Reset Target (the heating set point after outdoor reset) |
+| **Status** | Boiler Status: `Standby`, `Demand`, `Demand, held off`, `Prepurge`, `Ignition`, `Running`, `Post-purge`, `Pump delay`, `Anti-cycle`, `Link lost`, `Unavailable` (the boiler sent an error) or `Unknown (n)` (a code we haven't seen). Also Heat Demand, Burner Request and Anti-Cycle on their own. |
+| **Settings** (read every 5 min) | SH1, SH2, SH3 and DHW Setpoint, High Limit Auto Reset and Manual Reset |
 | **Counters** (read every 5 min) | Power On Hours, SH Run Time, SH Cycles, Ignitions, Ignition Attempts, Failed Ignitions |
 | **Health** | Outlet and Flue Sensor Difference (each sensor has two parts, and the boiler faults if they disagree), Boiler Link OK, Controller Online, and a count of link restarts |
 
@@ -116,11 +116,11 @@ project does **not** use that board, and their registers don't match. If you hav
 |---|---|---|
 | Cost | You buy the board and wire it in | Free. A USB cable into the display |
 | Registers | Documented by Lochinvar | Worked out by us. A few are still guesses |
-| Data | A short summary | Much more: flame signal, burner stage, fan, pump, counters |
+| Data | Its own register list | Flame signal, burner stage, fan, pump, counters and more |
 | Control | Can turn the boiler on or off and change the set point | Read-only. It can't change anything |
 | Fault codes | Has status and lockout codes | Lockout codes not found yet |
 | Wiring | RS-485: long runs, handles electrical noise | USB: short cable. The link has dropped a few times |
-| Updates | Should keep working after a controller update | A controller update could move the registers |
+| Updates | Lochinvar documents its registers | A controller update could move the registers |
 
 Use this project if you want detailed monitoring for free. Get the MODB-I-O board if you need to
 control the boiler, need official fault codes, or are wiring it into a building system.
@@ -143,7 +143,7 @@ A control can be swapped for a newer one.
 
 1. Compare the display with the photo at the top.
 2. Find the software version in the installer menu (Software Version). Ours ends in **938FT**. 938 is
-   the SMART SYSTEM platform, and FT means Fire Tube.
+   the SMART SYSTEM platform, and FT means Fire Tube. The logger below also saves it, in registers 30-44.
 3. Once the bridge is running, compare its readings with the display. Check outlet and inlet
    temperature, flame current, fan speed, and the History screen counters. If they don't match,
    please open an issue.
@@ -186,7 +186,8 @@ packages.
    ```
 
    On a Mac, run it as `caffeinate -is python3 -I tools/probe/08_long_capture.py` with the laptop on
-   power, so it doesn't sleep. Use `--hours N` to stop after N hours, and `--port` to pick the device.
+   power, so it doesn't sleep. On Linux, add `--port /dev/ttyUSB0`, because it only finds the Mac's
+   device name by itself. Use `--hours N` to stop after N hours.
 3. While it runs, type what the display says (like "prepurge" or "firing 40%") and press Enter. Your
    notes get saved with a timestamp.
 
@@ -226,8 +227,9 @@ of these on every pull request.
 [release-please](https://github.com/googleapis/release-please). The ESPHome package gets tags like
 `esphome-vX.Y.Z`. The container gets tags like `mqtt-vX.Y.Z`, plus the image
 `ghcr.io/kb1rma/lochinvar-native-modbus`. Which part a change releases depends on the files it
-touches. Changes under `esphome/` or `mqtt/` release that part. Changes to shared files (the map,
-docs, tools) release neither. If a change affects what a bridge does, change both bridges.
+touches. A `feat:` or `fix:` under `esphome/` or `mqtt/` releases that part. Other types, like
+`chore:` or `docs:`, don't release. Changes to `esphome/tests/` and to shared files (the map, docs,
+tools) release neither. If a change affects what a bridge does, change both bridges.
 
 Pull requests are squash-merged. Their titles must follow
 [Conventional Commits](https://www.conventionalcommits.org/), like `feat: add a sensor` or
