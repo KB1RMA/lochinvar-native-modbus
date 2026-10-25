@@ -1,21 +1,36 @@
 # MQTT bridge (Docker)
 
-This is a small program that runs in a Docker container. It reads your boiler and sends the readings to
-your MQTT broker. Home Assistant then finds the boiler on its own. You get the same sensors as the
-[ESPHome package](../esphome/README.md). See the [main README](../README.md) for the full list and how
-the project works.
+A small program in a Docker container. It reads your boiler and sends the readings to your MQTT broker.
+Home Assistant then finds the boiler by itself. You get the same sensors as the
+[ESPHome package](../esphome/README.md).
 
-Run it on a computer near the boiler, like a Raspberry Pi or a home server. The boiler's USB cable plugs
-into that computer.
+For what you get and which boilers work, see the [main README](../README.md).
 
 ```
-Boiler controller  --USB cable-->  computer running Docker  -->  MQTT broker  -->  Home Assistant
+Boiler's PC Connection port  --USB cable-->  Linux computer running Docker  -->  MQTT broker  -->  Home Assistant
 ```
+
+> [!NOTE]
+> **Running Home Assistant OS?** It can't run your own containers, and this isn't a Home Assistant
+> add-on yet. Use the [ESPHome package](../esphome/README.md) instead, or run this container on
+> another computer near the boiler.
 
 **It only reads.** It can only send one kind of Modbus request: function 03, which reads values. It has
 no code that can write to the boiler or change a setting. The tests check this. They make sure every
-message it sends is a function 03 read of one of four known blocks. These are the same blocks the
-project has always read.
+message it sends is a function 03 read of one of four known blocks.
+
+## What you need
+
+- A Lochinvar boiler with the SMART SYSTEM display and a USB **PC Connection** port. See
+  [Will it work on my boiler?](../README.md#will-it-work-on-my-boiler)
+- A Linux computer near the boiler that runs Docker, like a Raspberry Pi or a home server. Images are
+  built for amd64, arm64 and 32-bit ARM (arm/v7).
+- A USB cable. The boiler end is USB-B (the square printer kind).
+- An MQTT broker that Home Assistant uses, such as the Mosquitto add-on, with MQTT discovery on (the
+  default).
+
+Docker Desktop on a Mac or Windows PC can't easily pass a USB serial device into a container, so use
+Linux.
 
 ## Running it
 
@@ -175,7 +190,18 @@ still counts as an answer, so "Boiler Link OK" stays on and the port is not reop
 are cleared, Boiler Status reads "Unavailable", and the bridge tries again every 30 seconds.
 
 Sometimes only unplugging and replugging the USB cable brings the link back. That happened on the Mac
-too. See "Known problems" in the main README.
+too. See "Limits and known problems" in the main README.
+
+## Troubleshooting
+
+| What you see | What to check |
+|---|---|
+| The log says the serial port can't be opened | Is the `--device` path right? Run `ls /dev/serial/by-id/` again. Check [Serial port permissions](#serial-port-permissions). |
+| No device in Home Assistant | Check the MQTT login, and that MQTT discovery is on. Run with `LOG_LEVEL=debug`. |
+| Boiler Link OK stays off | Is the cable in **PC Connection**, not USB Memory Drive? Try another cable. |
+| Boiler Status reads "Unknown (n)" | A status we haven't seen yet, maybe a lockout. Please open an issue with the number and what the display says. |
+
+To see what the bridge is doing, run `docker logs lochinvar`.
 
 ## Differences from the ESPHome package
 
