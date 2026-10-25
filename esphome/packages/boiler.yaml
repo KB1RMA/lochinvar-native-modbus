@@ -164,12 +164,14 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     icon: mdi:thermometer-check
+    reuse_previous_range: true   # read with 137-142 across the unmapped 143-145: one command, not two
     lambda: |-
       if (x == 32768 || x == 0 || x == 43036) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   # SH1 set point after outdoor reset. The control stops updating it with no call for heat, so it is only
-  # published while Heat Demand is on (r118, read earlier in the same update).
+  # published while Heat Demand is on (r118, read earlier in the same update; unknown right after the link
+  # comes back counts as off).
   - platform: modbus_controller
     modbus_controller_id: boiler
     id: sh1_reset_target
@@ -182,13 +184,15 @@ sensor:
     state_class: measurement
     accuracy_decimals: 1
     entity_category: diagnostic
+    reuse_previous_range: true   # joins the 137-140 read across the unmapped 141
     lambda: |-
-      if (x == 32768 || x == 0 || !id(heat_demand).state) return NAN;
+      if (x == 32768 || x == 0 || !id(heat_demand).has_state() || !id(heat_demand).state) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
   # The outlet and flue sensors are dual thermistors (S1a/S1b at r62/r64, S3a/S3b at r63/r65). The control
   # faults ("Outlet Temp Diff", "Flue sens diff") when a pair disagrees, so a rising difference is an early
   # warning; normal is under 1 F. r64 and r65 come in the same read as r62 and r63, which are parsed first.
+  # get_raw_state() is r62/r63 before any filters a device config adds to those sensors.
   - platform: modbus_controller
     modbus_controller_id: boiler
     id: outlet_sensor_diff
@@ -203,8 +207,8 @@ sensor:
     entity_category: diagnostic
     icon: mdi:thermometer-alert
     lambda: |-
-      if (x == 32768 || x == 0 || isnan(id(outlet_temp).state)) return NAN;
-      return fabsf(id(outlet_temp).state - (((int) x & 0x7FFF) - 9468) / 25.0f);
+      if (x == 32768 || x == 0 || isnan(id(outlet_temp).get_raw_state())) return NAN;
+      return fabsf(id(outlet_temp).get_raw_state() - (((int) x & 0x7FFF) - 9468) / 25.0f);
 
   - platform: modbus_controller
     modbus_controller_id: boiler
@@ -220,8 +224,8 @@ sensor:
     entity_category: diagnostic
     icon: mdi:thermometer-alert
     lambda: |-
-      if (x == 32768 || x == 0 || isnan(id(exhaust_temp).state)) return NAN;
-      return fabsf(id(exhaust_temp).state - (((int) x & 0x7FFF) - 9468) / 25.0f);
+      if (x == 32768 || x == 0 || isnan(id(exhaust_temp).get_raw_state())) return NAN;
+      return fabsf(id(exhaust_temp).get_raw_state() - (((int) x & 0x7FFF) - 9468) / 25.0f);
 
   - platform: modbus_controller
     modbus_controller_id: boiler
