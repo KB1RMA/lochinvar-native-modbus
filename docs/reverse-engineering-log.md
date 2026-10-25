@@ -1,6 +1,7 @@
 # Reverse-engineering log
 
-Date of work: 2026-10-24 (about 09:30 to 10:20 local). Boiler model: not recorded yet.
+Date of work: 2026-10-24 (about 09:30 to 10:20 local). Boiler: Lochinvar Knight Fire Tube KHB155N, Series 100,
+natural gas, 155,000 BTU/hr input (15,500 minimum, 10:1), built 2023 (rating plate).
 
 ## Method (scripts in `tools/probe/`, run with `python3 -I`, no pyserial needed, uses termios)
 
@@ -369,7 +370,7 @@ between. The outlet reached 168-173 F against a 175 F SH1 setpoint just before e
 
 ## Open questions / next steps
 
-1. Electrical level and connector of the boiler port; boiler model; fill the README TODOs.
+1. Whether other SMART SYSTEM 938 boilers (KHN, WHN, WHB, Knight XL, Armor) use the same addresses.
 2. Status registers: partly done in session 2 (r84 codes, r85 timer, r137 anti-cycle, r140 burner request, r132
    boiler pump, demand and blower flags). Ignition (r84 = 7) seen in session 4. Still open: the long
    35 s prepurge in session 4; whether r129/r115 really are igniter and gas valve, now that the link stays

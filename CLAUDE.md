@@ -7,6 +7,9 @@ the ESPHome package (`esphome/`) and a Docker container (`mqtt/`). They must exp
 
 Start here: `registers/controller.yaml` (the map), `docs/reverse-engineering-log.md` (how we got it,
 display readings used as ground truth, open questions), `docs/discovery-notes.md` (earlier notes).
+The port is the display's "PC Connection" USB port that Lochinvar's WinPro program uses (control platform SMART SYSTEM
+"938"), and the parameter block follows WinPro's parameter tables; the map's `references` header lists the manuals.
+Keep findings in the map, README or CLAUDE.md; the history of how they were found goes in PR descriptions and commits.
 
 ## Hard rules
 
