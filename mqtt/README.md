@@ -157,7 +157,7 @@ The broker keeps the last message on every topic (they are "retained").
 
 This works like the ESPHome package. If the boiler stops answering:
 
-- the live readings show as unavailable, along with Delta T and Flame Present,
+- the live readings show as unavailable, along with Delta T, the sensor differences and Flame Present,
 - "Boiler Link OK" turns off,
 - Boiler Status reads "Link lost",
 - settings and counters keep their last values,

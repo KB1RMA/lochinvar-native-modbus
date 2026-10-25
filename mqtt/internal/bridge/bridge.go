@@ -312,6 +312,11 @@ func (b *Bridge) pollFast(now time.Time) (bool, error) {
 	}
 	b.status = v[entities.StatusCode]
 	b.guard.NoteStatus(b.status, now)
+	for _, e := range entities.InGroup(entities.Fast) {
+		if e.Combine != "" {
+			v[e.Key] = e.Combine.Apply(v[e.With], v[e.Key])
+		}
+	}
 	v[entities.DeltaT] = decode.DeltaT(v[entities.OutletTemp], v[entities.InletTemp])
 	v[entities.FlamePresent] = decode.FlamePresent(v[entities.FlameSignal])
 	for _, g := range []entities.Group{entities.Fast, entities.Derived} {

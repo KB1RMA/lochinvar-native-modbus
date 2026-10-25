@@ -34,6 +34,10 @@ const (
 const (
 	OutletTemp       = "outlet_temp"
 	InletTemp        = "inlet_temp"
+	ExhaustTemp      = "exhaust_temp"
+	OutletSensorDiff = "outlet_sensor_diff"
+	FlueSensorDiff   = "flue_sensor_diff"
+	SH1ResetTarget   = "sh1_reset_target"
 	FlameSignal      = "flame_signal"
 	BoilerPumpOutput = "boiler_pump_output"
 	StatusCode       = "status_code"
@@ -62,6 +66,10 @@ type Entity struct {
 	// Words is 2 for 32-bit counters (decoded with decode.U32), else 1.
 	Words  int
 	Decode decode.Func
+	// Combine, if set, joins the decoded reading with the With entity's in the same poll (a plain
+	// fast entity), the way the boiler.yaml lambda does with id(With).
+	Combine Combine
+	With    string
 
 	Unit              string
 	DeviceClass       string
@@ -75,7 +83,34 @@ type Entity struct {
 // IsModbus reports whether the entity is read from a register.
 func (e Entity) IsModbus() bool { return e.Address != 0 }
 
+// Combine is how a register entity's reading is joined with another one's.
+type Combine string
+
+// Combinations.
+const (
+	// AbsDiff is |With - this|: the two thermistors of a dual sensor.
+	AbsDiff Combine = "abs_diff"
+	// WhileOn is this reading while With reads on, else no reading.
+	WhileOn Combine = "while_on"
+)
+
+// Apply joins v with w, the With entity's reading.
+func (c Combine) Apply(w, v decode.Value) decode.Value {
+	switch c {
+	case AbsDiff:
+		return decode.SensorDiff(w, v)
+	case WhileOn:
+		return decode.While(w, v)
+	}
+	return v
+}
+
 func prec(n int) *int { return &n }
+
+func disabled(e Entity) Entity {
+	e.DisabledByDefault = true
+	return e
+}
 
 const (
 	degF        = "°F"
@@ -118,8 +153,33 @@ var All = []Entity{
 	// ---- fast group ----
 	liveTemp(OutletTemp, "Outlet Temperature", 62),
 	liveTemp(InletTemp, "Inlet Temperature", 73),
-	liveTemp("exhaust_temp", "Exhaust Temperature", 63),
+	liveTemp(ExhaustTemp, "Exhaust Temperature", 63),
 	liveTemp("outdoor_temp", "Outdoor Temperature", 75),
+	// The second thermistor of each dual sensor (S1b, S3b), published as the difference from the first
+	// one (r62, r63).
+	{
+		Key: OutletSensorDiff, Name: "Outlet Sensor Difference", Component: Sensor, Group: Fast, Address: 64, Words: 1,
+		Decode: decode.TempF, Combine: AbsDiff, With: OutletTemp,
+		Unit: degF, DeviceClass: "temperature_delta", StateClass: measurement, Precision: prec(1),
+		EntityCategory: diagnostic, Icon: "mdi:thermometer-alert",
+	},
+	{
+		Key: FlueSensorDiff, Name: "Flue Sensor Difference", Component: Sensor, Group: Fast, Address: 65, Words: 1,
+		Decode: decode.TempF, Combine: AbsDiff, With: ExhaustTemp,
+		Unit: degF, DeviceClass: "temperature_delta", StateClass: measurement, Precision: prec(1),
+		EntityCategory: diagnostic, Icon: "mdi:thermometer-alert",
+	},
+	{
+		Key: "target_temp", Name: "Target Temperature", Component: Sensor, Group: Fast, Address: 146, Words: 1,
+		Decode: decode.TargetF, Unit: degF, DeviceClass: temperature, StateClass: measurement, Precision: prec(1),
+		Icon: "mdi:thermometer-check",
+	},
+	// Published only while Heat Demand is on: the control stops updating it with no call.
+	{
+		Key: SH1ResetTarget, Name: "SH1 Reset Target", Component: Sensor, Group: Fast, Address: 142, Words: 1,
+		Decode: decode.TempF, Combine: WhileOn, With: HeatDemand,
+		Unit: degF, DeviceClass: temperature, StateClass: measurement, Precision: prec(1), EntityCategory: diagnostic,
+	},
 	{
 		Key: FlameSignal, Name: "Flame Signal", Component: Sensor, Group: Fast, Address: 66, Words: 1,
 		Decode: decode.Scaled(0.001), Unit: "µA", StateClass: measurement, Precision: prec(1),
@@ -177,6 +237,8 @@ var All = []Entity{
 	counter(IgnitionAttempts, "Ignition Attempts", 1304, ""),
 	counter(Ignitions, "Ignitions", 1306, ""),
 	counter("sh_run_time", "SH Run Time", 1308, "h"),
+	// Map confidence "guess" (WinPro "SH hours <50 %").
+	disabled(counter("sh_run_time_low_fire", "SH Run Time Low Fire", 1310, "h")),
 	counter("sh_cycles", "SH Cycles", 1312, ""),
 	// Lifetime attempts minus successes. Held while the counters were read during an ignition.
 	{

@@ -4,6 +4,7 @@ package decode
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 )
@@ -94,6 +95,18 @@ func TempF(raw uint16) Value {
 	return Num(fromTemp(raw))
 }
 
+// NoTarget is r146's raw value with no active set point (exactly 32.0 °F).
+const NoTarget uint16 = 43036
+
+// TargetF decodes the active set point (r146): a live temperature, with NoTarget as no reading.
+// In both captures r146 was NoTarget if and only if Heat Demand was off.
+func TargetF(raw uint16) Value {
+	if raw == NoTarget {
+		return None
+	}
+	return TempF(raw)
+}
+
 // SetpointF decodes parameters: the same formula, but boiler.yaml only drops 0 for them.
 func SetpointF(raw uint16) Value {
 	if raw == 0 {
@@ -128,6 +141,24 @@ func DeltaT(outlet, inlet Value) Value {
 		return None
 	}
 	return Num(o - i)
+}
+
+// SensorDiff is how far apart the two thermistors of a dual sensor read, |a - b|.
+func SensorDiff(a, b Value) Value {
+	x, ok1 := a.Float()
+	y, ok2 := b.Float()
+	if !ok1 || !ok2 {
+		return None
+	}
+	return Num(math.Abs(x - y))
+}
+
+// While is v while on reads on, else no reading.
+func While(on, v Value) Value {
+	if !on.On() {
+		return None
+	}
+	return v
 }
 
 // FlamePresent is on above 0.5 µA of flame signal.

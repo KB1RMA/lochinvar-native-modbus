@@ -1,6 +1,7 @@
 package entities_test
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -16,6 +17,13 @@ import (
 
 // renamed lists entities that differ on purpose (see entities.go).
 var renamed = map[string]string{"Link Watchdog Restarts": "Link Reconnects"}
+
+// combineLambda is the code a boiler.yaml lambda must contain for each Entity.Combine; %[1]s is With.
+// get_raw_state() is the other sensor's reading before any filters a device config adds, like ours.
+var combineLambda = map[entities.Combine]string{
+	entities.AbsDiff: "fabsf(id(%[1]s).get_raw_state() - (((int) x & 0x7FFF) - 9468) / 25.0f)",
+	entities.WhileOn: "!id(%[1]s).has_state() || !id(%[1]s).state",
+}
 
 // espFilter is one ESPHome filter, e.g. {multiply: 0.01} or {invert: null}.
 type espFilter map[string]any
@@ -87,6 +95,24 @@ func TestSameSetOfEntities(t *testing.T) {
 	for name := range esp {
 		if !ours[name] {
 			t.Errorf("%q from boiler.yaml is missing", name)
+		}
+	}
+}
+
+// The bridge applies every combination in one pass over the fast readings, so With must be a plain
+// fast register entity.
+func TestCombineWithPlainFastEntity(t *testing.T) {
+	t.Parallel()
+	for _, e := range entities.All {
+		if e.Combine == "" {
+			continue
+		}
+		if _, ok := combineLambda[e.Combine]; !ok || e.Group != entities.Fast {
+			t.Errorf("%s: combine %q in group %s", e.Key, e.Combine, e.Group)
+		}
+		w, ok := entities.ByKey(e.With)
+		if !ok || w.Group != entities.Fast || !w.IsModbus() || w.Combine != "" {
+			t.Errorf("%s: With %q must be a plain fast register entity", e.Key, e.With)
 		}
 	}
 }
@@ -175,6 +201,15 @@ func checkEntity(t *testing.T, esp espEntity, ours entities.Entity) {
 		eq("150 °F decodes", ok && math.Abs(got-150) < 1e-9, true)
 		eq("0 dropped", ours.Decode(0).Valid(), false)
 		eq("0x8000 dropped", !ours.Decode(0x8000).Valid(), strings.Contains(esp.Lambda, "32768"))
+		eq("43036 (32.0 °F) dropped", !ours.Decode(43036).Valid(), strings.Contains(esp.Lambda, "43036"))
+		if ours.Combine == "" {
+			eq("uses another entity", strings.Contains(esp.Lambda, "id("), false)
+		} else {
+			want := fmt.Sprintf(combineLambda[ours.Combine], ours.With)
+			if !strings.Contains(esp.Lambda, want) {
+				t.Errorf("lambda %q lacks %q (%s with %s)", esp.Lambda, want, ours.Combine, ours.With)
+			}
+		}
 	default:
 		factor := 1.0
 		for _, f := range esp.Filters {
