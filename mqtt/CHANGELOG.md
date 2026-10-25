@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/KB1RMA/lochinvar-native-modbus/compare/mqtt-v0.1.0...mqtt-v0.1.1) (2026-10-25)
+
+
+### Features
+
+* publish the target temperature, SH1 reset target and dual-sensor differences ([#9](https://github.com/KB1RMA/lochinvar-native-modbus/issues/9)) ([25b4ebf](https://github.com/KB1RMA/lochinvar-native-modbus/commit/25b4ebffd6cc36b5e56fa79596c693a20cb10ec2))
+
 ## 0.1.0 (2026-10-25)
 
 
