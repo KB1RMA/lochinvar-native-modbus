@@ -48,7 +48,7 @@ Then start the container:
 docker run -d --name lochinvar --restart unless-stopped \
   --device /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_XXXXXXXX-if00-port0:/dev/ttyUSB0 \
   -e MQTT_HOST=192.168.1.10 -e MQTT_USERNAME=lochinvar -e MQTT_PASSWORD=secret \
-  ghcr.io/kb1rma/lochinvar-native-modbus:0.1.1 # x-release-please-version
+  ghcr.io/kb1rma/lochinvar-native-modbus:0.1.2 # x-release-please-version
 ```
 
 Or with Docker Compose:
@@ -56,7 +56,7 @@ Or with Docker Compose:
 ```yaml
 services:
   lochinvar:
-    image: ghcr.io/kb1rma/lochinvar-native-modbus:0.1.1 # x-release-please-version
+    image: ghcr.io/kb1rma/lochinvar-native-modbus:0.1.2 # x-release-please-version
     restart: unless-stopped
     devices:
       - /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_XXXXXXXX-if00-port0:/dev/ttyUSB0
@@ -88,7 +88,7 @@ Each image has a signed build provenance attestation, made by this repository's 
 that an image was built here from the release tag, run:
 
 ```sh
-gh attestation verify oci://ghcr.io/kb1rma/lochinvar-native-modbus:0.1.1 -R KB1RMA/lochinvar-native-modbus # x-release-please-version
+gh attestation verify oci://ghcr.io/kb1rma/lochinvar-native-modbus:0.1.2 -R KB1RMA/lochinvar-native-modbus # x-release-please-version
 ```
 
 ### Serial port permissions
