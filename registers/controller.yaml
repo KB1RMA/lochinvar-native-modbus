@@ -162,15 +162,17 @@ settings:
   - {name: delta_t_fan_limit_start,  address: 1083, encoding: temp_delta_f, confidence: likely, note: "55 F; WinPro FANMAXS12C; service manual: reduces fan above 55 F rise"}
   - {name: fan_step_limits,          address: [1099, 1100, 1101, 1102], encoding: u16, confidence: likely, note: "250, 250, 50, 50; WinPro INCFAN, DECFAN, INCFAN_R, DECFAN_R (max fan change, then the same while running). r111 shows the active one"}
   # Installer settings.
-  - {name: outdoor_reset_sh1,        address: [1163, 1164, 1165, 1166, 1167], encoding: temp_f, confidence: likely, note: "35 F -> 180 F, 70 F -> 130 F, outdoor shutdown 100 F (cold outdoor, set point there, warm outdoor, set point there, shutdown). The line predicts r142: 167.7 F at 43.6 F outdoor (logged 167.7), 161.4 F at 48 F (logged 161.2). A group, not copies"}
-  - {name: outdoor_reset_sh1_shutdown_diff, address: 1168, encoding: temp_delta_f, confidence: guess, note: "10 F; manual default"}
-  - {name: outdoor_reset_sh2,        address: [1169, 1170, 1171, 1172, 1173], encoding: temp_f, confidence: guess, note: "25, 180, 70, 70, 70 F: the factory defaults, same layout as SH1"}
+  - {name: outdoor_reset_sh1,        address: [1163, 1164, 1165, 1166, 1167], encoding: temp_f, confidence: confirmed, note: "35 F -> 180 F, 70 F -> 130 F, outdoor shutdown 100 F: OUTDOOR1 LOW, SETPT1@L OUT1, OUTDOOR1 HIGH, SETPT1@H OUT1, OUTDOOR1 SHDN, all matching the display. The display lists LOW, HIGH, SETPT@L, SETPT@H, SHDN; the registers pair each outdoor temperature with its set point. The line predicts r142: 167.7 F at 43.6 F outdoor (logged 167.7), 161.4 F at 48 F (logged 161.2). A group, not copies"}
+  - {name: outdoor_reset_sh1_shutdown_diff, address: 1168, encoding: temp_delta_f, confidence: confirmed, note: "10 F; display OUTDOOR1 DIFF"}
+  - {name: outdoor_reset_sh2,        address: [1169, 1170, 1171, 1172, 1173], encoding: temp_f, confidence: guess, note: "25, 180, 70, 70, 70 F: the factory defaults. SH1 and SH3 confirm the layout; the SH2 menu has not been read off the display"}
   - {name: outdoor_reset_sh2_shutdown_diff, address: 1174, encoding: temp_delta_f, confidence: guess}
-  - {name: outdoor_reset_sh3,        address: [1175, 1176, 1177, 1178, 1179], encoding: temp_f, confidence: guess, note: "factory defaults, same layout as SH1"}
-  - {name: outdoor_reset_sh3_shutdown_diff, address: 1180, encoding: temp_delta_f, confidence: guess}
-  - {name: setpoint_limits,          address: [1187, 1188, 1189, 1190], encoding: temp_f, confidence: guess, note: "60, 140, 60, 185 F: tank min, tank max, SH min, SH max (manual defaults); order from value only"}
+  - {name: outdoor_reset_sh3,        address: [1175, 1176, 1177, 1178, 1179], encoding: temp_f, confidence: confirmed, note: "25, 180, 70, 70, 70 F, same layout as SH1. 1176-1179 matched the display (SETPT3@L 180, OUTDOOR3 HIGH 70, SETPT3@H 70, SHDN 70); OUTDOOR3 LOW (1175) was not on the photographed screen"}
+  - {name: outdoor_reset_sh3_shutdown_diff, address: 1180, encoding: temp_delta_f, confidence: confirmed, note: "10 F; display OUTDOOR3 DIFF"}
+  - {name: dhw_boiler_setpoint,      address: 1181, encoding: temp_f, confidence: likely, note: "180 F; display DHW BLR SETPT 180. The only 180 F register not otherwise assigned (1164/1170/1176 are the SH set points at low outdoor, 1271 the BMS set point)"}
+  - {name: tank_setpoint_diff,       address: 1183, encoding: temp_delta_f, confidence: likely, note: "6 F (150); display TANK SP DIFF 6. The only 150 in the parameter block outside the ramp delay steps (1272-1283) and gradient limiting (1093)"}
+  - {name: setpoint_limits,          address: [1187, 1188, 1189, 1190], encoding: temp_f, confidence: likely, note: "60, 140, 60, 185 F: tank min, tank max, SH min, SH max. Display TANK MIN SETPT 60 and TANK MAX SETPT 140 match; 1189 is also 60, so which of 1187 and 1189 is tank min rests on order. SH min / max not read off the display"}
   - {name: sh_offsets_differentials, address: [1191, 1192, 1193, 1194, 1195, 1196], encoding: temp_delta_f, confidence: guess, note: "10, 20 x3: SH1-SH3 offset and differential (manual defaults)"}
-  - {name: dhw_boiler_offset_differential, address: [1201, 1202], encoding: temp_delta_f, confidence: guess, note: "10, 20 F (manual defaults)"}
+  - {name: dhw_boiler_offset_differential, address: [1201, 1202], encoding: temp_delta_f, confidence: guess, note: "10, 20 F; display DHW BLR OFFST 10, DHW BLR DIFF 20. 1184/1185 hold 10, 20 as well and sit next to 1181 and 1183, so they are as likely; changing one value on the display and rescanning would tell"}
   - {name: night_setback_offsets,    address: [1221, 1222], encoding: temp_delta_f, confidence: guess, note: "0, 0: SH and DHW night setback off. They sit right before the triggers, as in WinPro"}
   - {name: night_setback_triggers,   address: [1223, 1224, 1225, 1226, 1227, 1228, 1229, 1230, 1231, 1232, 1233, 1234, 1235, 1236, 1237, 1238, 1239, 1240, 1241, 1242, 1243, 1244, 1245, 1246, 1247, 1248, 1249, 1250], encoding: u16, unit: min, confidence: likely, note: "minutes of the week from Sunday 00:00. WinPro lists 28 triggers: SH on 1-7, SH off 1-7, DHW on 1-7, DHW off 1-7. Here every on is 20:00 and every off is 06:00, daily; inactive while the offsets are 0"}
   - {name: freeze_protection,        address: [1253, 1254], encoding: temp_f, confidence: likely, note: "45 F pumps on, 37 F burner on (manual defaults and the protection text)"}
@@ -181,6 +183,8 @@ settings:
   - {name: bms_voltages,             address: [1263, 1264, 1265, 1266, 1267], encoding: centivolts, confidence: guess, note: "3.00, 2.00, 10.00, 2.00, 1.00 V: boiler pump min volts, BMS volts at min / max, on volts, off differential (manual defaults)"}
   - {name: bms_rates,                address: [1268, 1269], encoding: u16, unit: percent, scale: 0.1, confidence: guess, note: "20 %, 100 %: BMS rate at min / max volts"}
   - {name: bms_setpoints,            address: [1270, 1271], encoding: temp_f, confidence: guess, note: "70, 180 F: BMS set point at min / max volts (manual defaults)"}
+  - {name: sh_dhw_switch_times,      address: [1161, 1162], encoding: tenths_s, confidence: likely, note: "18000 each = 30:00; display SH/DHW SW TIME 30:00 and DHW/SH SW TIME 30:00. Which is which is unknown while both are equal"}
+  - {name: dhw_fan_speed_max,        address: 1159, encoding: u16, unit: rpm, confidence: guess, note: "8200; display DHW MAX FAN 8200 RPM. 1098 and 1150 also read 8200 but are mapped as max fan"}
   - {name: service_notification,     address: [1154, 1155, 1156], encoding: u16, confidence: guess, note: "13 months, 8760 h, 5000 (cycles / 10?): manual defaults 13 months, 8760 h, 50,000 cycles"}
 
 info:
