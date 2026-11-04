@@ -134,6 +134,23 @@ func setpoint(key, name string, address uint16) Entity {
 	}
 }
 
+// settingDelta is a temp_delta_f parameter (raw / 25, no flag bit).
+func settingDelta(key, name string, address uint16) Entity {
+	return Entity{
+		Key: key, Name: name, Component: Sensor, Group: Slow, Address: address, Words: 1,
+		Decode: decode.Scaled(0.04), Unit: degF, DeviceClass: "temperature_delta", Precision: prec(0),
+		EntityCategory: diagnostic,
+	}
+}
+
+// settingTime is a tenths_s parameter, in seconds.
+func settingTime(key, name string, address uint16) Entity {
+	return Entity{
+		Key: key, Name: name, Component: Sensor, Group: Slow, Address: address, Words: 1,
+		Decode: decode.Scaled(0.1), Unit: "s", DeviceClass: "duration", Precision: prec(0), EntityCategory: diagnostic,
+	}
+}
+
 func counter(key, name string, address uint16, unit string) Entity {
 	return Entity{
 		Key: key, Name: name, Component: Sensor, Group: Slow, Address: address, Words: 2,
@@ -231,6 +248,27 @@ var All = []Entity{
 	setpoint("setpoint_dhw", "DHW Setpoint", 1286),
 	setpoint("high_limit_auto_reset", "High Limit Auto Reset", 1291),
 	setpoint("high_limit_manual_reset", "High Limit Manual Reset", 1292),
+
+	// ---- slow group: installer settings (parameter block 1156-1205) ----
+	// Outdoor reset curves; each outdoor temperature sits next to its set point. SH2 is left out until
+	// its registers are checked against the display.
+	setpoint("sh1_outdoor_low", "SH1 Outdoor Low", 1163),
+	setpoint("sh1_setpoint_outdoor_low", "SH1 Setpoint at Outdoor Low", 1164),
+	setpoint("sh1_outdoor_high", "SH1 Outdoor High", 1165),
+	setpoint("sh1_setpoint_outdoor_high", "SH1 Setpoint at Outdoor High", 1166),
+	setpoint("sh1_outdoor_shutdown", "SH1 Outdoor Shutdown", 1167),
+	settingDelta("sh1_outdoor_shutdown_diff", "SH1 Outdoor Shutdown Diff", 1168),
+	setpoint("sh3_outdoor_low", "SH3 Outdoor Low", 1175),
+	setpoint("sh3_setpoint_outdoor_low", "SH3 Setpoint at Outdoor Low", 1176),
+	setpoint("sh3_outdoor_high", "SH3 Outdoor High", 1177),
+	setpoint("sh3_setpoint_outdoor_high", "SH3 Setpoint at Outdoor High", 1178),
+	setpoint("sh3_outdoor_shutdown", "SH3 Outdoor Shutdown", 1179),
+	settingDelta("sh3_outdoor_shutdown_diff", "SH3 Outdoor Shutdown Diff", 1180),
+	setpoint("dhw_boiler_setpoint", "DHW Boiler Setpoint", 1181),
+	settingDelta("tank_setpoint_diff", "Tank Setpoint Diff", 1183),
+	// Both read 30:00 on our boiler, so which is which is a guess from the menu order.
+	settingTime("sh_dhw_switch_time", "SH to DHW Switch Time", 1161),
+	settingTime("dhw_sh_switch_time", "DHW to SH Switch Time", 1162),
 
 	// ---- slow group: lifetime counters ----
 	counter("power_on_hours", "Power On Hours", 1302, "h"),

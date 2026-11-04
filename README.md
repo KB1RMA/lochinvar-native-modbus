@@ -59,7 +59,7 @@ All of these show up in Home Assistant under one device.
 | **Temperatures** | Outlet, Inlet, Exhaust and Outdoor Temperature (°F), Delta T (outlet minus inlet), Target Temperature (what the boiler aims for during a call for heat), and SH1 Reset Target (the heating set point after outdoor reset) |
 | **Burner** | Firing Rate (%), Flame Signal (µA), Flame Present, Fan Speed (rpm), Boiler Pump Output (%) |
 | **Status** | Boiler Status: `Standby`, `Demand`, `Demand, held off`, `Prepurge`, `Ignition`, `Running`, `Post-purge`, `Pump delay`, `Anti-cycle`, `Link lost`, `Unavailable` (the boiler sent an error) or `Unknown (n)` (a code we haven't seen). Also Heat Demand, Burner Request and Anti-Cycle on their own. |
-| **Settings** (read every 5 min) | SH1, SH2, SH3 and DHW Setpoint, High Limit Auto Reset and Manual Reset |
+| **Settings** (read every 5 min) | SH1, SH2, SH3 and DHW Setpoint, High Limit Auto Reset and Manual Reset, the SH1 and SH3 outdoor reset curves (Outdoor Low and High, the set point at each, Outdoor Shutdown and its diff), DHW Boiler Setpoint, Tank Setpoint Diff, and the SH to DHW and DHW to SH Switch Times |
 | **Counters** (read every 5 min) | Power On Hours, SH Run Time, SH Cycles, Ignitions, Ignition Attempts, Failed Ignitions |
 | **Health** | Outlet and Flue Sensor Difference (each sensor has two parts, and the boiler faults if they disagree), Boiler Link OK, Controller Online, and a count of link restarts |
 

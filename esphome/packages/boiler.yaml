@@ -378,6 +378,229 @@ sensor:
       if (x == 0) return NAN;
       return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
+  # ---- slow group: installer settings (boiler_slow; parameter block 1156-1205) ----
+  # Outdoor reset curves. Each outdoor temperature sits next to its set point; the display lists both
+  # temperatures first. SH2 is not exposed: its registers have not been checked against the display.
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Outdoor Low
+    address: 1163
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Setpoint at Outdoor Low
+    address: 1164
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Outdoor High
+    address: 1165
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Setpoint at Outdoor High
+    address: 1166
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Outdoor Shutdown
+    address: 1167
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH1 Outdoor Shutdown Diff
+    address: 1168
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature_delta
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.04             # temp_delta_f: raw / 25
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Outdoor Low
+    address: 1175
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Setpoint at Outdoor Low
+    address: 1176
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Outdoor High
+    address: 1177
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Setpoint at Outdoor High
+    address: 1178
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Outdoor Shutdown
+    address: 1179
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH3 Outdoor Shutdown Diff
+    address: 1180
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature_delta
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.04             # temp_delta_f: raw / 25
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: DHW Boiler Setpoint
+    address: 1181
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    lambda: |-
+      if (x == 0) return NAN;
+      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: Tank Setpoint Diff
+    address: 1183
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "°F"
+    device_class: temperature_delta
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.04             # temp_delta_f: raw / 25
+
+  # Both read 30:00 on our boiler, so which register is which is a guess from the menu order.
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH to DHW Switch Time
+    address: 1161
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: s
+    device_class: duration
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1              # tenths_s
+
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: DHW to SH Switch Time
+    address: 1162
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: s
+    device_class: duration
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    filters:
+      - multiply: 0.1              # tenths_s
+
   # ---- slow group: lifetime counters (boiler_slow; 32-bit, high word at the lower address) ----
   - platform: modbus_controller
     modbus_controller_id: boiler_slow

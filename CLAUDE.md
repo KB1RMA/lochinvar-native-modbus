@@ -44,7 +44,7 @@ root README) release neither.
   a 15 s fuzz of the request builder, govulncheck, and a multi-arch image build. The tests check parity with
   `boiler.yaml` (names, addresses, units, decoding), every address against the map, that every frame sent is a
   function 03 read and only `internal/modbus/link.go` calls Write, and the version against the manifest. It
-  reads only the blocks `08_long_capture.py` reads (50-99, 100-149, 1256-1305, 1306-1355). When `boiler.yaml`
+  reads the blocks `08_long_capture.py` reads (50-99, 100-149, 1256-1305, 1306-1355) plus 1156-1205 (installer settings, read once in the 2026-10-24 parameter scan before the bridges polled it). When `boiler.yaml`
   changes behavior, change `mqtt/` the same way (or the parity test fails). Intended differences: "Link
   Reconnects" instead of "Link Watchdog Restarts" (it reopens the port after 3 min down, backing off to 30 min),
   "Controller Online" from the MQTT last will. No Go on this Mac by default: a session fetched go and

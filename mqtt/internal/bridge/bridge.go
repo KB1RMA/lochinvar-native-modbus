@@ -29,10 +29,12 @@ type Block struct {
 	Start, Count uint16
 }
 
-// The same function 03 blocks tools/probe/08_long_capture.py reads, so nothing new is sent to the boiler.
+// The function 03 blocks tools/probe/08_long_capture.py reads, plus 1156-1205 from the 2026-10-24 scan of
+// the parameter block (installer settings).
 var (
-	FastBlocks = []Block{{50, 50}, {100, 50}}    // r62-r140
-	SlowBlocks = []Block{{1256, 50}, {1306, 50}} // settings 1286-1293, counters 1302-1315
+	FastBlocks = []Block{{50, 50}, {100, 50}} // r62-r140
+	// Installer settings 1161-1183, settings 1286-1293, counters 1302-1315.
+	SlowBlocks = []Block{{1156, 50}, {1256, 50}, {1306, 50}}
 )
 
 // Reader is the boiler link (*modbus.Link).
