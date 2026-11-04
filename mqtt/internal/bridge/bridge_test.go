@@ -92,7 +92,18 @@ func TestFirstPollPublishesEverything(t *testing.T) {
 	expect(t, "SH1 setpoint at outdoor high", o.state("sh1_setpoint_outdoor_high"), "130")
 	expect(t, "SH1 shutdown diff", o.state("sh1_outdoor_shutdown_diff"), "10")
 	expect(t, "tank setpoint diff", o.state("tank_setpoint_diff"), "6")
-	expect(t, "switch time", o.state("sh_dhw_switch_time"), "1800")
+	expect(t, "SH1 setpoint at outdoor low", o.state("sh1_setpoint_outdoor_low"), "180")
+	expect(t, "SH1 outdoor high", o.state("sh1_outdoor_high"), "70")
+	expect(t, "SH1 outdoor shutdown", o.state("sh1_outdoor_shutdown"), "100")
+	expect(t, "SH3 outdoor low", o.state("sh3_outdoor_low"), "25")
+	expect(t, "SH3 setpoint at outdoor low", o.state("sh3_setpoint_outdoor_low"), "170")
+	expect(t, "SH3 outdoor high", o.state("sh3_outdoor_high"), "72")
+	expect(t, "SH3 setpoint at outdoor high", o.state("sh3_setpoint_outdoor_high"), "65")
+	expect(t, "SH3 outdoor shutdown", o.state("sh3_outdoor_shutdown"), "75")
+	expect(t, "SH3 shutdown diff", o.state("sh3_outdoor_shutdown_diff"), "12")
+	expect(t, "DHW boiler setpoint", o.state("dhw_boiler_setpoint"), "175")
+	expect(t, "SH to DHW switch time", o.state("sh_dhw_switch_time"), "1800")
+	expect(t, "DHW to SH switch time", o.state("dhw_sh_switch_time"), "1801")
 	expect(t, "attempts", o.state("ignition_attempts"), "5109")
 	expect(t, "SH run time", o.state("sh_run_time"), "3828")
 	expect(t, "SH run time low fire", o.state("sh_run_time_low_fire"), "2055")
@@ -286,6 +297,30 @@ func TestExceptionKeepsLinkUpWithoutReopen(t *testing.T) {
 	f.bridge.Step(at(3605)) // polls back off to every 30 s, like a silent link
 	expect(t, "outlet", o.state("outlet_temp"), "150.0")
 	expect(t, "status", o.status(), "Running")
+}
+
+func TestSlowBlockExceptionClearsOnlyThatBlock(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.boiler.SetExceptionAt(bridge.SlowBlocks[0].Start, 2)
+	f.bridge.Step(at(0))
+	o := f.out
+	expect(t, "link", o.last["lochinvar/link"], "online")
+	expect(t, "status", o.status(), "Running")
+	expect(t, "SH1 outdoor low", o.state("sh1_outdoor_low"), "None")
+	expect(t, "switch time", o.state("sh_dhw_switch_time"), "None")
+	expect(t, "SH1 still read", o.state("setpoint_sh1"), "180")
+	expect(t, "counters still read", o.state("ignition_attempts"), "5109")
+	expect(t, "failed", o.state("failed_ignitions"), "109")
+
+	f.boiler.SetExceptionAt(bridge.SlowBlocks[0].Start, 0)
+	for s := 5; s <= 300; s += 5 { // a partly failed slow poll waits the full interval
+		f.bridge.Step(at(float64(s)))
+	}
+	expect(t, "SH1 outdoor low back", o.state("sh1_outdoor_low"), "35")
+	if n := slowReads(f.boiler); n != 2 {
+		t.Fatalf("%d slow reads in 5 min, want 2", n)
+	}
 }
 
 func TestPortErrorRetriesEveryTenSeconds(t *testing.T) {

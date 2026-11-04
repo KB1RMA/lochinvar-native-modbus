@@ -8,7 +8,8 @@
 // after many). Like the ESP's watchdog, this only arms once the boiler has answered since start, so a
 // boiler that is off does not cause a reopen loop. Port errors (adapter unplugged) retry every 10 s.
 // A Modbus exception reply is not a link loss: the boiler answered, so the link stays up and the port
-// is never reopened for it; that poll's readings are cleared and Boiler Status reads "Unavailable".
+// is never reopened for it; that poll's readings are cleared and Boiler Status reads "Unavailable". The
+// slow blocks are read one by one, so an exception on one clears only the settings or counters in it.
 package bridge
 
 import (
@@ -29,13 +30,17 @@ type Block struct {
 	Start, Count uint16
 }
 
-// The function 03 blocks tools/probe/08_long_capture.py reads, plus 1156-1205 from the 2026-10-24 scan of
-// the parameter block (installer settings).
+// The function 03 blocks tools/probe/08_long_capture.py reads, plus the installer settings 1161-1183.
 var (
 	FastBlocks = []Block{{50, 50}, {100, 50}} // r62-r140
 	// Installer settings 1161-1183, settings 1286-1293, counters 1302-1315.
-	SlowBlocks = []Block{{1156, 50}, {1256, 50}, {1306, 50}}
+	SlowBlocks = []Block{{1161, 23}, {1256, 50}, {1306, 50}}
 )
+
+// Covers reports whether address is in the block.
+func (blk Block) Covers(address uint16) bool {
+	return address >= blk.Start && address-blk.Start < blk.Count
+}
 
 // Reader is the boiler link (*modbus.Link).
 type Reader interface {
@@ -261,24 +266,33 @@ const (
 	readException            // the boiler answered with a Modbus exception
 )
 
-// readBlocks returns address -> raw and how the read went. Port errors are returned.
+// readBlock adds the block to regs and returns how the read went. Port errors are returned.
+func (b *Bridge) readBlock(blk Block, regs map[uint16]uint16) (readResult, error) {
+	values, err := b.link.Read(blk.Start, blk.Count)
+	var exc *modbus.ExceptionError
+	switch {
+	case err == nil:
+	case errors.As(err, &exc):
+		slog.Warn("read failed", "start", blk.Start, "count", blk.Count, "err", err)
+		return readException, nil
+	case errors.Is(err, modbus.ErrNoReply):
+		return readNoReply, nil
+	default:
+		return readNoReply, err
+	}
+	for i, v := range values {
+		regs[blk.Start+uint16(i)] = v
+	}
+	return readOK, nil
+}
+
+// readBlocks returns address -> raw and how the read went, stopping at the first block that fails.
+// Port errors are returned.
 func (b *Bridge) readBlocks(blocks []Block) (map[uint16]uint16, readResult, error) {
 	regs := make(map[uint16]uint16)
 	for _, blk := range blocks {
-		values, err := b.link.Read(blk.Start, blk.Count)
-		var exc *modbus.ExceptionError
-		switch {
-		case err == nil:
-		case errors.As(err, &exc):
-			slog.Warn("read failed", "start", blk.Start, "count", blk.Count, "err", err)
-			return nil, readException, nil
-		case errors.Is(err, modbus.ErrNoReply):
-			return nil, readNoReply, nil
-		default:
-			return nil, readNoReply, err
-		}
-		for i, v := range values {
-			regs[blk.Start+uint16(i)] = v
+		if res, err := b.readBlock(blk, regs); res != readOK || err != nil {
+			return nil, res, err
 		}
 	}
 	return regs, readOK, nil
@@ -331,21 +345,36 @@ func (b *Bridge) pollFast(now time.Time) (bool, error) {
 	return true, nil
 }
 
+// pollSlow reads each slow block on its own, so a block that answers with an exception only clears its
+// own entities. No reply stops the poll and keeps every value, like the ESP's slow group.
 func (b *Bridge) pollSlow(now time.Time) error {
-	regs, res, err := b.readBlocks(SlowBlocks)
-	if err != nil {
-		return err
-	}
-	if res != readOK {
-		b.nextSlow = now.Add(b.opt.offlineWait())
-		return nil
+	regs := make(map[uint16]uint16)
+	var failed []Block
+	for _, blk := range SlowBlocks {
+		res, err := b.readBlock(blk, regs)
+		if err != nil {
+			return err
+		}
+		switch res {
+		case readOK:
+		case readNoReply:
+			b.nextSlow = now.Add(b.opt.offlineWait())
+			return nil
+		case readException:
+			failed = append(failed, blk)
+		}
 	}
 	b.nextSlow = now.Add(b.opt.SlowInterval)
+	if len(failed) == len(SlowBlocks) {
+		b.nextSlow = now.Add(b.opt.offlineWait())
+	}
 	v := map[string]decode.Value{}
 	for _, e := range entities.InGroup(entities.Slow) {
 		switch {
 		case !e.IsModbus():
 			continue
+		case inAny(failed, e):
+			v[e.Key] = decode.None
 		case e.Words == 2:
 			v[e.Key] = decode.U32(regs[e.Address], regs[e.Address+1])
 		default:
@@ -361,6 +390,18 @@ func (b *Bridge) pollSlow(now time.Time) error {
 		b.nextSlow = now.Add(min(b.opt.SlowInterval, decode.IgnitionSettle))
 	}
 	return nil
+}
+
+// inAny reports whether any of the entity's registers is in one of the blocks.
+func inAny(blocks []Block, e entities.Entity) bool {
+	for _, blk := range blocks {
+		for w := range e.Words {
+			if blk.Covers(e.Address + uint16(w)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Step does whatever is due at now and returns how long to wait before the next Step.

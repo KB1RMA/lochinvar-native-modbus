@@ -23,6 +23,7 @@ type Boiler struct {
 	opened    []string
 	silent    bool
 	exception byte
+	excAt     map[uint16]byte
 	fail      bool
 	corrupt   bool
 }
@@ -55,6 +56,16 @@ func (b *Boiler) SetSilent(v bool) { b.mu.Lock(); b.silent = v; b.mu.Unlock() }
 
 // SetException makes every reply a Modbus exception with this code; 0 turns it off.
 func (b *Boiler) SetException(code byte) { b.mu.Lock(); b.exception = code; b.mu.Unlock() }
+
+// SetExceptionAt makes reads that start at address answer with this exception code; 0 turns it off.
+func (b *Boiler) SetExceptionAt(address uint16, code byte) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.excAt == nil {
+		b.excAt = map[uint16]byte{}
+	}
+	b.excAt[address] = code
+}
 
 // SetFail makes opening, reading and writing fail, like an unplugged adapter.
 func (b *Boiler) SetFail(v bool) { b.mu.Lock(); b.fail = v; b.mu.Unlock() }
@@ -114,11 +125,15 @@ func (b *Boiler) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 	slave, fn := p[0], p[1]
+	address, count := binary.BigEndian.Uint16(p[2:]), binary.BigEndian.Uint16(p[4:])
+	exc := b.exception
+	if exc == 0 {
+		exc = b.excAt[address]
+	}
 	var reply []byte
-	if b.exception != 0 {
-		reply = []byte{slave, fn | 0x80, b.exception}
+	if exc != 0 {
+		reply = []byte{slave, fn | 0x80, exc}
 	} else {
-		address, count := binary.BigEndian.Uint16(p[2:]), binary.BigEndian.Uint16(p[4:])
 		reply = make([]byte, 3, 3+2*int(count)+2)
 		reply[0], reply[1], reply[2] = slave, fn, byte(2*count) //nolint:gosec // count <= 50
 		for i := range count {
@@ -162,9 +177,9 @@ func Running() map[uint16]uint16 {
 		66: 2100, 110: 3600, 80: 4000, 132: 10000, 84: 9, 118: 1, 137: 0, 138: 4, 139: 16, 140: 96,
 		1286: RawTemp(140), 1287: RawTemp(180), 1288: RawTemp(125), 1289: RawTemp(125),
 		1291: RawTemp(200), 1292: RawTemp(210),
-		1161: 18000, 1162: 18000, 1163: RawTemp(35), 1164: RawTemp(180), 1165: RawTemp(70), 1166: RawTemp(130),
-		1167: RawTemp(100), 1168: 250, 1175: RawTemp(25), 1176: RawTemp(180), 1177: RawTemp(70), 1178: RawTemp(70),
-		1179: RawTemp(70), 1180: 250, 1181: RawTemp(180), 1183: 150,
+		1161: 18000, 1162: 18010, 1163: RawTemp(35), 1164: RawTemp(180), 1165: RawTemp(70), 1166: RawTemp(130),
+		1167: RawTemp(100), 1168: 250, 1175: RawTemp(25), 1176: RawTemp(170), 1177: RawTemp(72), 1178: RawTemp(65),
+		1179: RawTemp(75), 1180: 300, 1181: RawTemp(175), 1183: 150,
 		1302: 0, 1303: 40000, 1304: 0, 1305: 5109, 1306: 0, 1307: 5000, 1308: 0, 1309: 3828, 1310: 0, 1311: 2055,
 		1312: 0, 1313: 4500,
 	}
