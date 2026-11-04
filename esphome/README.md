@@ -55,8 +55,8 @@ never copy the sensors into your own file.
 
    ```yaml
    packages:
-     transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.1 # x-release-please-version
-     boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.1 # x-release-please-version
+     transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.2 # x-release-please-version
+     boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.2 # x-release-please-version
    ```
 
 4. Make sure the `esp32:` block uses the ESP-IDF framework (`type: esp-idf`). The USB host needs it.
@@ -97,8 +97,8 @@ wifi:
   password: !secret wifi_password
 
 packages:
-  transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.1 # x-release-please-version
-  boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.1 # x-release-please-version
+  transport: github://KB1RMA/lochinvar-native-modbus/esphome/packages/usb-ft232.yaml@esphome-v0.1.2 # x-release-please-version
+  boiler: github://KB1RMA/lochinvar-native-modbus/esphome/packages/boiler.yaml@esphome-v0.1.2 # x-release-please-version
 ```
 
 Entities are named after your `friendly_name`, like `sensor.boiler_outlet_temperature` and
