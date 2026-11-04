@@ -87,6 +87,33 @@ modbus_controller:
 # ESPHome hands lambdas the parsed value `x` as a float.
 # ---------------------------------------------------------------------------------------------
 
+# Shared fields for the slow settings sensors, merged in with `<<:`. ESPHome ignores top-level keys
+# that start with a dot.
+.setting_temp_f: &setting_temp_f
+  platform: modbus_controller
+  modbus_controller_id: boiler_slow
+  register_type: holding
+  value_type: U_WORD
+  unit_of_measurement: "°F"
+  device_class: temperature
+  accuracy_decimals: 0
+  entity_category: diagnostic
+  lambda: |-
+    if (x == 0) return NAN;
+    return (((int) x & 0x7FFF) - 9468) / 25.0f;
+
+.setting_temp_delta_f: &setting_temp_delta_f
+  platform: modbus_controller
+  modbus_controller_id: boiler_slow
+  register_type: holding
+  value_type: U_WORD
+  unit_of_measurement: "°F"
+  device_class: temperature_delta
+  accuracy_decimals: 0
+  entity_category: diagnostic
+  filters:
+    - multiply: 0.04             # temp_delta_f: raw / 25
+
 sensor:
   # ---- fast group (every 5 s) ----
   - platform: modbus_controller
@@ -294,89 +321,115 @@ sensor:
       return id(outlet_temp).state - id(inlet_temp).state;
 
   # ---- slow group: settings (boiler_slow, every 5 min) ----
-  - platform: modbus_controller
-    modbus_controller_id: boiler_slow
+  - <<: *setting_temp_f
     name: SH1 Setpoint
     address: 1287
-    register_type: holding
-    value_type: U_WORD
-    unit_of_measurement: "°F"
-    device_class: temperature
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    lambda: |-
-      if (x == 0) return NAN;
-      return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
-  - platform: modbus_controller
-    modbus_controller_id: boiler_slow
+  - <<: *setting_temp_f
     name: SH2 Setpoint
     address: 1288
-    register_type: holding
-    value_type: U_WORD
-    unit_of_measurement: "°F"
-    device_class: temperature
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    lambda: |-
-      if (x == 0) return NAN;
-      return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
-  - platform: modbus_controller
-    modbus_controller_id: boiler_slow
+  - <<: *setting_temp_f
     name: SH3 Setpoint
     address: 1289
-    register_type: holding
-    value_type: U_WORD
-    unit_of_measurement: "°F"
-    device_class: temperature
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    lambda: |-
-      if (x == 0) return NAN;
-      return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
-  - platform: modbus_controller
-    modbus_controller_id: boiler_slow
+  - <<: *setting_temp_f
     name: DHW Setpoint
     address: 1286
-    register_type: holding
-    value_type: U_WORD
-    unit_of_measurement: "°F"
-    device_class: temperature
-    accuracy_decimals: 0
-    entity_category: diagnostic
-    lambda: |-
-      if (x == 0) return NAN;
-      return (((int) x & 0x7FFF) - 9468) / 25.0f;
 
-  - platform: modbus_controller
-    modbus_controller_id: boiler_slow
+  - <<: *setting_temp_f
     name: High Limit Auto Reset
     address: 1291
+
+  - <<: *setting_temp_f
+    name: High Limit Manual Reset
+    address: 1292
+
+  # ---- slow group: installer settings (boiler_slow; reads 1161-1168, 1175-1181 and 1183) ----
+  # Outdoor reset curves. Each outdoor temperature sits next to its set point; the display lists both
+  # temperatures first. SH2 is not exposed: its registers have not been checked against the display.
+  - <<: *setting_temp_f
+    name: SH1 Outdoor Low
+    address: 1163
+
+  - <<: *setting_temp_f
+    name: SH1 Setpoint at Outdoor Low
+    address: 1164
+
+  - <<: *setting_temp_f
+    name: SH1 Outdoor High
+    address: 1165
+
+  - <<: *setting_temp_f
+    name: SH1 Setpoint at Outdoor High
+    address: 1166
+
+  - <<: *setting_temp_f
+    name: SH1 Outdoor Shutdown
+    address: 1167
+
+  - <<: *setting_temp_delta_f
+    name: SH1 Outdoor Shutdown Diff
+    address: 1168
+
+  - <<: *setting_temp_f
+    name: SH3 Outdoor Low
+    address: 1175
+
+  - <<: *setting_temp_f
+    name: SH3 Setpoint at Outdoor Low
+    address: 1176
+
+  - <<: *setting_temp_f
+    name: SH3 Outdoor High
+    address: 1177
+
+  - <<: *setting_temp_f
+    name: SH3 Setpoint at Outdoor High
+    address: 1178
+
+  - <<: *setting_temp_f
+    name: SH3 Outdoor Shutdown
+    address: 1179
+
+  - <<: *setting_temp_delta_f
+    name: SH3 Outdoor Shutdown Diff
+    address: 1180
+
+  - <<: *setting_temp_f
+    name: DHW Boiler Setpoint
+    address: 1181
+
+  - <<: *setting_temp_delta_f
+    name: Tank Setpoint Diff
+    address: 1183
+
+  # Both read 30:00 on our boiler, so which register is which is a guess from the menu order.
+  - platform: modbus_controller
+    modbus_controller_id: boiler_slow
+    name: SH to DHW Switch Time
+    address: 1161
     register_type: holding
     value_type: U_WORD
-    unit_of_measurement: "°F"
-    device_class: temperature
+    unit_of_measurement: s
+    device_class: duration
     accuracy_decimals: 0
     entity_category: diagnostic
-    lambda: |-
-      if (x == 0) return NAN;
-      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+    filters:
+      - multiply: 0.1              # tenths_s
 
   - platform: modbus_controller
     modbus_controller_id: boiler_slow
-    name: High Limit Manual Reset
-    address: 1292
+    name: DHW to SH Switch Time
+    address: 1162
     register_type: holding
     value_type: U_WORD
-    unit_of_measurement: "°F"
-    device_class: temperature
+    unit_of_measurement: s
+    device_class: duration
     accuracy_decimals: 0
     entity_category: diagnostic
-    lambda: |-
-      if (x == 0) return NAN;
-      return (((int) x & 0x7FFF) - 9468) / 25.0f;
+    filters:
+      - multiply: 0.1              # tenths_s
 
   # ---- slow group: lifetime counters (boiler_slow; 32-bit, high word at the lower address) ----
   - platform: modbus_controller
