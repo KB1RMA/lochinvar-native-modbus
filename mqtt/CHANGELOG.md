@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.2](https://github.com/KB1RMA/lochinvar-native-modbus/compare/mqtt-v0.1.1...mqtt-v0.1.2) (2026-11-04)
+
+
+### Features
+
+* expose outdoor reset, DHW and switch-time settings ([1761134](https://github.com/KB1RMA/lochinvar-native-modbus/commit/176113485378330fd697732b207b85210bef046b))
+
+
+### Bug Fixes
+
+* container: a Modbus exception on one slow block now only clears that block's settings or counters; the other slow blocks keep updating ([1761134](https://github.com/KB1RMA/lochinvar-native-modbus/commit/176113485378330fd697732b207b85210bef046b))
+
 ## [0.1.1](https://github.com/KB1RMA/lochinvar-native-modbus/compare/mqtt-v0.1.0...mqtt-v0.1.1) (2026-10-25)
 
 
